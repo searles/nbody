@@ -1,6 +1,8 @@
 package searles
 
+import javafx.scene.paint.Color
 import kotlin.math.hypot
+import kotlin.math.min
 import kotlin.math.pow
 
 class Particle(
@@ -9,7 +11,7 @@ class Particle(
     val m: Double,
     var vx: Double,
     var vy: Double,
-    val color: Int = 0xffffffff.toInt()
+    val color: Color = Color.WHITE
 ) {
     fun step(dt: Double) {
         x += vx * dt
@@ -25,8 +27,11 @@ class Particle(
 
         val a = force / m
 
-        vx += a * d0x * dt
-        vy += a * d0y * dt
+        // the change of velocity should be smaller than d because it is into the direction of x2/y2.
+        val ft = min(a * dt, 2 * distance)
+
+        vx += d0x * ft
+        vy += d0y * ft
     }
 }
 
