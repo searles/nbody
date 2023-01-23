@@ -26,6 +26,7 @@ class BarnesHutTree(x0: Double, y0: Double, len: Double) {
     }
 
     fun updateForce(p: Particle, G: Double, dt: Double, theta: Double) {
+        p.resetTotalForce()
         root.updateForce(p, theta, G, dt)
     }
 

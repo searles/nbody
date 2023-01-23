@@ -1,6 +1,5 @@
 package searles
 
-import javafx.scene.paint.Color
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -45,17 +44,14 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
     fun getStandardDeviation(): Double {
         var s2x = 0.0
         var s2y = 0.0
-        var count = 0
 
         particleTree.forAllParticles {
             s2x += (it.x - centerX).pow(2)
             s2y += (it.y - centerY).pow(2)
-
-            count++
         }
 
-        s2x /= count - 1
-        s2y /= count - 1
+        s2x /= particles.size - 1
+        s2y /= particles.size - 1
 
         return sqrt(max(s2x, s2y))
     }
@@ -69,33 +65,35 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
     companion object {
         fun createSolarSystem(): Universe {
             return Universe(G = 6.674e-11, dt = 36000.0).apply {
-                add(Particle(0.0, 0.0, 1.989e30, 0.0, 0.0, Color.YELLOW)) // sun
-                add(Particle(149.6e9, 0.0, 5.972e24, 0.0, 29780.0, Color.BLUE)) // earth
-                add(Particle(149.6e9 + 384400000, 0.0, 7.348e22, 0.0, 29780.0 + 1022, Color.WHITE)) // moon
+                add(Particle(0.0, 0.0, 1.989e30, 0.0, 0.0)) // sun
+                add(Particle(149.6e9, 0.0, 5.972e24, 0.0, 29780.0)) // earth
+                add(Particle(149.6e9 + 384400000, 0.0, 7.348e22, 0.0, 29780.0 + 1022)) // moon
             }
         }
 
         fun createSimpleSolarSystem(): Universe {
             return Universe(G = 1.0, dt = 0.001).apply {
-                add(Particle(0.0, 0.0, 1.0, 0.0, 0.0, Color.YELLOW)) // sun
-                add(Particle(1.0, 0.0, 1e-4, 0.0, 1.0, Color.BLUE)) // earth
-                add(Particle(1.1, 0.0, 1e-8, 0.0, 1e-3 + 1.0, Color.WHITE)) // moon
+                add(Particle(0.0, 0.0, 1.0, 0.0, 0.0)) // sun
+                add(Particle(1.0, 0.0, 1e-4, 0.0, 1.0)) // earth
+                add(Particle(1.1, 0.0, 1e-8, 0.0, 1e-3 + 1.0)) // moon
             }
         }
 
         fun createDisc(): Universe {
             return Universe(G = 1.0, dt = 0.01).apply {
                 val blackHole = Particle(0.0, 0.0, 1.0, 0.0, 0.0)
-                addRotatingDisc(10000, 1.0, 1e-9, blackHole, true, Color.YELLOW)
+                addRotatingDisc(10000, 1.0, 1e-9, blackHole, true)
             }
         }
 
         fun createCollidingDiscs(): Universe {
-            val blackHole1 = Particle(-1.5, 0.0, 10.0, 0.0, 0.4)
-            val blackHole2 = Particle(1.5, 0.0, 10.0, 0.0, -0.4)
-            return Universe(G = 0.1, dt = 0.01, theta = 0.7).apply {
-                addRotatingDisc(5000, 1.0, 1e-4, blackHole1, true, Color.color(1.0, 1.0, 0.5, 0.5))
-                addRotatingDisc(5000, 1.0, 1e-4, blackHole2, true, Color.color(0.7, 0.8, 1.0, 0.5))
+            val blackHole1 = Particle(-1.5, -1.0, 10.0, 0.0, 0.0)
+            val blackHole2 = Particle(1.5, -1.0, 10.0, 0.0, 0.0)
+            val blackHole3 = Particle(0.0, 1.6, 10.0, 0.0, 0.0)
+            return Universe(G = 0.01, dt = 0.01, theta = 0.7).apply {
+                addRotatingDisc(10000, 1.2, 1e-4, blackHole1, false)
+                addRotatingDisc(10000, 1.2, 1e-4, blackHole2, false)
+                addRotatingDisc(10000, 1.2, 1e-4, blackHole3, false)
             }
         }
 
@@ -106,7 +104,7 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
                 repeat(10000) {
                     val rad = sqrt(Math.random()) * 100
                     val arc = Math.random() * 2 * Math.PI
-                    val m = Math.random()
+                    val m = Math.random().pow(3)
 
                     val u1 = Math.random()
                     val u2 = Math.random()
@@ -119,8 +117,7 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
                         Particle(
                             cos(arc) * rad, sin(arc) * rad,
                             m.pow(3),
-                            vx, vy,
-                            Color.color(1.0 - (1 - m) * 0.25, 1.0 - (1 - m) * 0.5, 1.0 - (1 - m) * 0.75, 0.7)
+                            vx, vy
                         )
                     )
                 }
@@ -133,14 +130,14 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
             val particleCount = 50000
 
             return Universe(G = 0.01, dt = 0.1).apply {
-                add(Particle(distance, 0.0, massBlackHole, 0.0, 0.3, Color.WHITE))
+                add(Particle(distance, 0.0, massBlackHole, 0.0, 0.3))
 
-                val centerBlackHole = Particle(0.0, 0.0, 100.0, 0.0, 0.0, Color.WHITE)
-                addRotatingDisc(particleCount, 50.0, 1e-4, centerBlackHole, false, Color.color(1.0, 0.8, 0.5, 0.2))
+                val centerBlackHole = Particle(0.0, 0.0, 100.0, 0.0, 0.0)
+                addRotatingDisc(particleCount, 50.0, 1e-4, centerBlackHole, false)
             }
         }
 
-        fun Universe.addRotatingDisc(count: Int, rad: Double, mass: Double, center: Particle, isClockwise: Boolean, color: Color) {
+        fun Universe.addRotatingDisc(count: Int, rad: Double, mass: Double, center: Particle, isClockwise: Boolean) {
             repeat(count) {
                 val r = sqrt(Math.random()) * rad
                 val arc = Math.random() * 2 * PI
@@ -151,9 +148,9 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
                 val vy = -cos(arc) * v
 
                 if(!isClockwise) {
-                    add(Particle(x, y, mass, vx + center.vx, vy + center.vy, color))
+                    add(Particle(x, y, mass, vx + center.vx, vy + center.vy))
                 } else {
-                    add(Particle(x, y, mass, -vx + center.vx, -vy + center.vy, color))
+                    add(Particle(x, y, mass, -vx + center.vx, -vy + center.vy))
                 }
             }
 
