@@ -85,17 +85,17 @@ class MainView : View() {
         gc.fill = c("black")
         gc.fillRect(0.0, 0.0, width, height)
 
-        var minMass = universe.particles.first().m
-        var maxMass = universe.particles.first().m
+        var minMass = universe.bodies.first().mass
+        var maxMass = universe.bodies.first().mass
         var meanLogForce = 0.0
         var varianceLogForce = 0.0
         var n = 0
 
-        universe.forEachParticle {
+        universe.forEachBody {
             n++
 
-            minMass = min(minMass, it.m)
-            maxMass = max(maxMass, it.m)
+            minMass = min(minMass, it.mass)
+            maxMass = max(maxMass, it.mass)
 
             val logForce = ln(it.totalForce)
 
@@ -104,9 +104,9 @@ class MainView : View() {
             varianceLogForce -= meanLogForce.pow(2)
         }
 
-        universe.forEachParticle {
+        universe.forEachBody {
             // size varies from 0.2 to 4 using 3rd root of mass.
-            val size = getSizeForMass(it.m, minMass, maxMass)
+            val size = getSizeForMass(it.mass, minMass, maxMass)
             gc.fill = getColorForStats(ln(it.totalForce), meanLogForce, sqrt(varianceLogForce))
             val vx = (it.x - cx + len / 2.0) / len * width
             val vy = (it.y - cy + len / 2.0) / len * height

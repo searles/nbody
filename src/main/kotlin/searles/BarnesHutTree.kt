@@ -18,7 +18,7 @@ class BarnesHutTree(x0: Double, y0: Double, len: Double) {
     }
 
     private fun insert(p: Particle) {
-        while(!root.isInside(p)) {
+        while (!root.isInside(p)) {
             expand(p.x, p.y)
         }
 
@@ -34,178 +34,179 @@ class BarnesHutTree(x0: Double, y0: Double, len: Double) {
         val removedParticles = mutableListOf<Particle>()
         root = root.step(dt, removedParticles)
 
-        for(p in removedParticles) {
+        for (p in removedParticles) {
             insert(p)
         }
     }
 
     private fun expand(x: Double, y: Double) {
-        root = if(x < root.x0) {
-            if(y < root.y0) {
+        root = if (x < root.x0) {
+            if (y < root.y0) {
                 InnerNode(root.x0 - root.len, root.y0 - root.len, 2 * root.len, rightBottom = root)
             } else {
                 InnerNode(root.x0 - root.len, root.y0, 2 * root.len, rightTop = root)
             }
         } else {
-            if(y < root.y0) {
+            if (y < root.y0) {
                 InnerNode(root.x0, root.y0 - root.len, 2 * root.len, leftBottom = root)
             } else {
                 InnerNode(root.x0, root.y0, 2 * root.len, leftTop = root)
             }
         }
     }
-}
 
-abstract class Node(val x0: Double, val y0: Double, val len: Double) {
-    abstract val x: Double
-    abstract val y: Double
-    abstract val m: Double
-    abstract val particleCount: Int
+    abstract class Node(val x0: Double, val y0: Double, val len: Double) {
+        abstract val x: Double
+        abstract val y: Double
+        abstract val m: Double
+        abstract val particleCount: Int
 
-    fun isInside(p: Particle): Boolean {
-        return (p.x in x0 .. x0 + len) && (p.y in y0 .. y0 + len)
+        fun isInside(p: Particle): Boolean {
+            return (p.x in x0..x0 + len) && (p.y in y0..y0 + len)
+        }
+
+        abstract fun insert(p: Particle): Node
+
+        abstract fun step(dt: Double, removedParticles: MutableList<Particle>): Node
+
+        abstract fun updateForce(p: Particle, theta: Double, G: Double, dt: Double)
+
+        abstract fun forAllParticles(action: (Particle) -> Unit)
     }
 
-    abstract fun insert(p: Particle): Node
+    class InnerNode(
+        x0: Double, y0: Double, len: Double,
+        leftTop: Node = ExternalNode(x0, y0, len / 2),
+        rightTop: Node = ExternalNode(x0 + len / 2, y0, len / 2),
+        rightBottom: Node = ExternalNode(x0 + len / 2, y0 + len / 2, len / 2),
+        leftBottom: Node = ExternalNode(x0, y0 + len / 2, len / 2)
+    ) : Node(x0, y0, len) {
+        private val children = mutableListOf(leftTop, rightTop, rightBottom, leftBottom)
 
-    abstract fun step(dt: Double, removedParticles: MutableList<Particle>): Node
+        override var m: Double = 0.0
+            private set
+        override var x: Double = 0.0
+            private set
+        override var y: Double = 0.0
+            private set
+        override var particleCount: Int = children.sumOf { it.particleCount }
+            private set
 
-    abstract fun updateForce(p: Particle, theta: Double, G: Double, dt: Double)
+        init {
+            updateValues()
+        }
 
-    abstract fun forAllParticles(action: (Particle) -> Unit)
-}
+        private fun updateValues() {
+            m = children.sumOf { it.m }
+            particleCount = children.sumOf { it.particleCount }
 
-class InnerNode(x0: Double, y0: Double, len: Double,
-    leftTop: Node = ExternalNode(x0, y0, len / 2),
-    rightTop: Node = ExternalNode(x0 + len / 2, y0, len / 2),
-    rightBottom: Node = ExternalNode(x0 + len / 2, y0 + len / 2, len / 2),
-    leftBottom: Node = ExternalNode(x0, y0 + len / 2, len / 2)
-) : Node(x0, y0, len) {
-    private val children = mutableListOf(leftTop, rightTop, rightBottom, leftBottom)
+            if (particleCount == 0) return
 
-    override var m: Double = 0.0
-        private set
-    override var x: Double = 0.0
-        private set
-    override var y: Double = 0.0
-        private set
-    override var particleCount: Int = children.sumOf { it.particleCount }
-        private set
+            x = children.sumOf { it.x * it.m } / m
+            y = children.sumOf { it.y * it.m } / m
+        }
 
-    init {
-        updateValues()
-    }
+        override fun insert(p: Particle): Node {
+            require(isInside(p))
 
-    private fun updateValues() {
-        m = children.sumOf { it.m }
-        particleCount = children.sumOf { it.particleCount }
+            val index = children.indexOfFirst { it.isInside(p) }
+            children[index] = children[index].insert(p)
 
-        if(particleCount == 0) return
+            x = (x * m + p.x * p.m) / (m + p.m)
+            y = (y * m + p.y * p.m) / (m + p.m)
+            m += p.m
+            particleCount++
 
-        x = children.sumOf { it.x * it.m } / m
-        y = children.sumOf { it.y * it.m } / m
-    }
+            return this
+        }
 
-    override fun insert(p: Particle): Node  {
-        require(isInside(p))
+        override fun step(dt: Double, removedParticles: MutableList<Particle>): Node {
+            val mark = removedParticles.size
+            children.replaceAll { it.step(dt, removedParticles) }
 
-        val index = children.indexOfFirst { it.isInside(p) }
-        children[index] = children[index].insert(p)
+            // update values
+            updateValues()
 
-        x = (x * m + p.x * p.m) / (m + p.m)
-        y = (y * m + p.y * p.m) / (m + p.m)
-        m += p.m
-        particleCount++
+            // try to reinsert removed particles, maybe they belong to a direct neighbor.
+            with(removedParticles.listIterator(mark)) {
+                while (hasNext()) {
+                    val p = next()
+                    if (isInside(p)) {
+                        insert(p)
+                        remove()
+                    }
+                }
+            }
 
-        return this
-    }
+            return tryCollapse()
+        }
 
-    override fun step(dt: Double, removedParticles: MutableList<Particle>): Node {
-        val mark = removedParticles.size
-        children.replaceAll { it.step(dt, removedParticles) }
+        private fun tryCollapse(): Node {
+            if (particleCount <= 1) {
+                val newNode = ExternalNode(x0, y0, len)
+                forAllParticles { newNode.insert(it) }
+                return newNode
+            }
 
-        // update values
-        updateValues()
+            return this
+        }
 
-        // try to reinsert removed particles, maybe they belong to a direct neighbor.
-        with(removedParticles.listIterator(mark)) {
-            while(hasNext()) {
-                val p = next()
-                if(isInside(p)) {
-                    insert(p)
-                    remove()
+        override fun updateForce(p: Particle, theta: Double, G: Double, dt: Double) {
+            val distance = hypot(p.x - x, p.y - y)
+            if (len / distance < theta) {
+                p.addForce(x, y, m, G, dt)
+            } else {
+                for (it in children) {
+                    it.updateForce(p, theta, G, dt)
                 }
             }
         }
 
-        return tryCollapse()
-    }
-
-    private fun tryCollapse(): Node {
-        if(particleCount <= 1) {
-            val newNode = ExternalNode(x0, y0, len)
-            forAllParticles { newNode.insert(it) }
-            return newNode
-        }
-
-        return this
-    }
-
-    override fun updateForce(p: Particle, theta: Double, G: Double, dt: Double) {
-        val distance = hypot(p.x - x, p.y - y)
-        if (len / distance < theta) {
-            p.addForce(x, y, m, G, dt)
-        } else {
-            for(it in children) {
-                it.updateForce(p, theta, G, dt)
+        override fun forAllParticles(action: (Particle) -> Unit) {
+            for (it in children) {
+                it.forAllParticles(action)
             }
         }
     }
 
-    override fun forAllParticles(action: (Particle) -> Unit) {
-        for(it in children) {
-            it.forAllParticles(action)
-        }
-    }
-}
+    class ExternalNode(x0: Double, y0: Double, len: Double, var particle: Particle? = null) : Node(x0, y0, len) {
+        override val x: Double get() = particle?.x ?: 0.0
+        override val y: Double get() = particle?.y ?: 0.0
+        override val m: Double get() = particle?.m ?: 0.0
+        override val particleCount: Int get() = if (particle == null) 0 else 1
 
-class ExternalNode(x0: Double, y0: Double, len: Double, var particle: Particle? = null) : Node(x0, y0, len) {
-    override val x: Double get() = particle?.x ?: 0.0
-    override val y: Double get() = particle?.y ?: 0.0
-    override val m: Double get() = particle?.m ?: 0.0
-    override val particleCount: Int get() = if(particle == null) 0 else 1
-
-    override fun insert(p: Particle): Node {
-        return if(particle == null) {
-            particle = p
-            this
-        } else {
-            val newNode = InnerNode(x0, y0, len)
-            newNode.insert(particle!!)
-            newNode.insert(p)
-            newNode
-        }
-    }
-
-    override fun step(dt: Double, removedParticles: MutableList<Particle>): Node {
-        if(particle != null) {
-            particle!!.step(dt)
-            if(!isInside(particle!!)) {
-                removedParticles.add(particle!!)
-                particle = null
+        override fun insert(p: Particle): Node {
+            return if (particle == null) {
+                particle = p
+                this
+            } else {
+                val newNode = InnerNode(x0, y0, len)
+                newNode.insert(particle!!)
+                newNode.insert(p)
+                newNode
             }
         }
 
-        return this
-    }
+        override fun step(dt: Double, removedParticles: MutableList<Particle>): Node {
+            if (particle != null) {
+                particle!!.step(dt)
+                if (!isInside(particle!!)) {
+                    removedParticles.add(particle!!)
+                    particle = null
+                }
+            }
 
-    override fun updateForce(p: Particle, theta: Double, G: Double, dt: Double) {
-        if(particle != null && p != particle) {
-            p.addForce(particle!!.x, particle!!.y, particle!!.m, G, dt)
+            return this
         }
-    }
 
-    override fun forAllParticles(action: (Particle) -> Unit) {
-        if(particle != null) action(particle!!)
+        override fun updateForce(p: Particle, theta: Double, G: Double, dt: Double) {
+            if (particle != null && p != particle) {
+                p.addForce(particle!!.x, particle!!.y, particle!!.m, G, dt)
+            }
+        }
+
+        override fun forAllParticles(action: (Particle) -> Unit) {
+            if (particle != null) action(particle!!)
+        }
     }
 }
