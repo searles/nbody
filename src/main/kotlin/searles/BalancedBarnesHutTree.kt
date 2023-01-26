@@ -10,17 +10,12 @@ class BalancedBarnesHutTree {
     val gx: Double get() = root?.gx ?: 0.0
     val gy: Double get() = root?.gy ?: 0.0
 
-    fun validate() {
-        root?.validate()
-    }
-
     fun updateForce(body: Body, G: Double, dt: Double, theta: Double) {
         body.resetTotalForce()
         root?.updateForce(body, theta, G, dt)
     }
 
     fun step(body: Body, dt: Double) {
-        validate()
         body.step(dt)
 
         if(body.parent?.containsInCorrectChild(body) == false) {
@@ -29,8 +24,6 @@ class BalancedBarnesHutTree {
         } else {
             body.parent?.recalibrate()
         }
-
-        validate()
     }
 
     fun add(body: Body) {
