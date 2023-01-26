@@ -23,9 +23,9 @@ class BarnesHutTreeTest {
 
     @Test
     fun `when adding three particles then particles are stored in tree`() {
-        val sun = Particle(0.0, 0.0, 1.989e30, 0.0, 0.0, Color.YELLOW)
-        val earth = Particle(149.6e9, 0.0, 5.972e24, 0.0, 29780.0, Color.BLUE)
-        val moon = Particle(149.6e9 + 384400000, 0.0, 7.348e22, 0.0, 29780.0 + 1022, Color.WHITE)
+        val sun = Particle(0.0, 0.0, 1.989e30, 0.0, 0.0)
+        val earth = Particle(149.6e9, 0.0, 5.972e24, 0.0, 29780.0)
+        val moon = Particle(149.6e9 + 384400000, 0.0, 7.348e22, 0.0, 29780.0 + 1022)
 
         val tree = BarnesHutTree(-1.0, -1.0, 2.0)
 
