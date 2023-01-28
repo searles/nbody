@@ -1,4 +1,4 @@
-package searles.nbody2d
+package searles.nbody.nbody2d
 
 import kotlin.math.hypot
 import kotlin.math.min
@@ -9,7 +9,7 @@ sealed class Node(var parent: Branch? = null, var x: Double, var y: Double) {
     abstract val gy: Double
     abstract val mass: Double
 
-    abstract fun updateForce(body: Body, theta: Double, G: Double, dt: Double)
+    abstract fun updateForceForBody(body: Body, theta: Double, G: Double, dt: Double)
     abstract fun recalibrate()
 }
 
@@ -22,7 +22,7 @@ class Branch(
     override var mass: Double = 0.0
 
     fun contains(x: Double, y: Double): Boolean {
-        return BalancedBarnesHutTree.isInside(x, y, this.x, this.y, this.len)
+        return BarnesHutTree.isInside(x, y, this.x, this.y, this.len)
     }
 
     fun containsInCorrectChild(body: Body): Boolean {
@@ -83,7 +83,7 @@ class Branch(
         this.gy = gym / m
     }
 
-    override fun updateForce(body: Body, theta: Double, G: Double, dt: Double) {
+    override fun updateForceForBody(body: Body, theta: Double, G: Double, dt: Double) {
         // This uses recursion. We will need a path of length
         // log2(2 * bodies.size - 1) to store the current path.
         // Use 32, because 2^32 > 4 Bio.
@@ -92,7 +92,7 @@ class Branch(
             body.addForce(this, G, dt)
         } else {
             for(it in children) {
-                it?.updateForce(body, theta, G, dt)
+                it?.updateForceForBody(body, theta, G, dt)
             }
         }
     }
@@ -114,12 +114,12 @@ class Body(
         totalForce = 0.0
     }
 
-    fun step(dt: Double) {
+    fun move(dt: Double) {
         x += vx * dt
         y += vy * dt
     }
 
-    override fun updateForce(body: Body, theta: Double, G: Double, dt: Double) {
+    override fun updateForceForBody(body: Body, theta: Double, G: Double, dt: Double) {
         body.addForce(this, G, dt)
     }
 

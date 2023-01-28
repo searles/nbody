@@ -1,4 +1,4 @@
-package searles.nbody2d
+package searles.nbody.nbody2d
 
 import javafx.animation.AnimationTimer
 import javafx.application.Application
@@ -20,11 +20,11 @@ class NBody2D : Application() {
     private val width = 800.0
     private val height = 800.0
 
-    val universe = Universe.createParticleSuckingCloud()
+    val universe = Universe.createCollidingDiscs()
 
-    private var cx: Double = universe.centerX
-    private var cy: Double = universe.centerY
-    private var len: Double = universe.getStandardDeviation() * 4
+    private var cx: Double = universe.bodyStats.cx
+    private var cy: Double = universe.bodyStats.cy
+    private var len: Double = 2.33 * sqrt(max(universe.bodyStats.s2x, universe.bodyStats.s2y))
 
     override fun start(primaryStage: Stage) {
         val canvas = Canvas(width, height)
@@ -94,29 +94,10 @@ class NBody2D : Application() {
         graphicsContext.fill = Color.BLACK
         graphicsContext.fillRect(0.0, 0.0, width, height)
 
-        var minMass = universe.bodies.first().mass
-        var maxMass = universe.bodies.first().mass
-        var meanLogForce = 0.0
-        var varianceLogForce = 0.0
-        var n = 0
-
-        universe.forEachBody {
-            n++
-
-            minMass = min(minMass, it.mass)
-            maxMass = max(maxMass, it.mass)
-
-            val logForce = ln(it.totalForce)
-
-            varianceLogForce = (n - 1.0) / n * (varianceLogForce + meanLogForce.pow(2)) + logForce.pow(2) / n
-            meanLogForce = (n - 1.0) / n * meanLogForce + logForce / n
-            varianceLogForce -= meanLogForce.pow(2)
-        }
-
         universe.forEachBody {
             // size varies from 0.2 to 4 using 3rd root of mass.
-            val size = getSizeForMass(it.mass, minMass, maxMass)
-            graphicsContext.fill = getColorForStats(ln(it.totalForce), meanLogForce, sqrt(varianceLogForce))
+            val size = getSizeForMass(it.mass, universe.bodyStats.minMass, universe.bodyStats.maxMass)
+            graphicsContext.fill = getColorForStats(ln(it.totalForce), universe.bodyStats.meanLogForce, sqrt(universe.bodyStats.varianceLogForce))
             val vx = (it.x - cx + len / 2.0) / len * width
             val vy = (it.y - cy + len / 2.0) / len * height
             graphicsContext.fillOval(vx, vy, size, size)

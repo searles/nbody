@@ -1,4 +1,4 @@
-package searles.nbody3d
+package searles.nbody.nbody3d
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
