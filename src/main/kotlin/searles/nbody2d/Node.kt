@@ -1,4 +1,4 @@
-package searles
+package searles.nbody2d
 
 import kotlin.math.hypot
 import kotlin.math.min
@@ -10,7 +10,7 @@ sealed class Node(var parent: Branch? = null, var x: Double, var y: Double) {
     abstract val mass: Double
 
     abstract fun updateForce(body: Body, theta: Double, G: Double, dt: Double)
-    abstract fun validate()
+    abstract fun recalibrate()
 }
 
 class Branch(
@@ -45,7 +45,6 @@ class Branch(
     }
 
     fun shrinkForDistinctChildren(x0: Double, y0: Double, x1: Double, y1: Double) {
-        validate()
         while(true) {
             val index0 = indexOf(x0, y0)
             val index1 = indexOf(x1, y1)
@@ -63,22 +62,25 @@ class Branch(
                 2 -> { x += len; y += len }
                 else -> { x -= len; y += len }
             }
-
-//            require(BalancedBarnesHutTree.isInside(x0, y0, x, y, len)) { "($x0, $y0) is not inside (${x-len} - ${x+len}, ${y-len} - ${y+len})" }
-//            require(BalancedBarnesHutTree.isInside(x1, y1, x, y, len)) { "($x1, $y1) is not inside (${x-len} - ${x+len}, ${y-len} - ${y+len})" }
         }
     }
 
-    fun recalibrate() {
-        var node: Branch? = this
+    override fun recalibrate() {
+        var gxm = 0.0
+        var gym = 0.0
+        var m = 0.0
 
-        while(node != null) {
-            node.mass = node.children.filterNotNull().sumOf { it.mass }
-            node.gx = node.children.filterNotNull().sumOf { it.mass * it.gx } / node.mass
-            node.gy = node.children.filterNotNull().sumOf { it.mass * it.gy } / node.mass
+        children.filterNotNull().forEach {
+            it.recalibrate() // TODO: This can be done by marking the tree nodes.
 
-            node = node.parent
+            gxm += it.gx * it.mass
+            gym += it.gy * it.mass
+            m += it.mass
         }
+
+        this.mass = m
+        this.gx = gxm / m
+        this.gy = gym / m
     }
 
     override fun updateForce(body: Body, theta: Double, G: Double, dt: Double) {
@@ -92,14 +94,6 @@ class Branch(
             for(it in children) {
                 it?.updateForce(body, theta, G, dt)
             }
-        }
-    }
-
-    override fun validate() {
-        require(this.parent == null || this.parent!!.len > this.len)
-        children.filterNotNull().forEach {
-            require(this.contains(it.x, it.y))
-            it.validate()
         }
     }
 }
@@ -129,8 +123,6 @@ class Body(
         body.addForce(this, G, dt)
     }
 
-    override fun validate() {}
-
     fun addForce(other: Node, G: Double, dt: Double) {
         if(other == this) return
 
@@ -147,6 +139,10 @@ class Body(
         vx += d0x * ft
         vy += d0y * ft
         totalForce += force // XXX or 'a'?
+    }
+
+    override fun recalibrate() {
+        // nothing to do.
     }
 
     override fun toString(): String {

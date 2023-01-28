@@ -1,4 +1,4 @@
-package searles
+package searles.nbody3d
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -8,6 +8,7 @@ import kotlin.math.*
 class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
     val centerX: Double get() = tree.gx
     val centerY: Double get() = tree.gy
+    val centerZ: Double get() = tree.gz
 
     val bodies = mutableListOf<Body>()
 
@@ -26,6 +27,8 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
         val chunks = bodies.chunked(chunkSize)
 
         coroutineScope {
+            tree.recalibrate()
+
             val jobs = chunks.map { chunk ->
                 async {
                     chunk.forEach { tree.updateForce(it, G, dt, theta) }
@@ -45,16 +48,19 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
     fun getStandardDeviation(): Double {
         var s2x = 0.0
         var s2y = 0.0
+        var s2z = 0.0
 
         bodies.forEach {
             s2x += (it.gx - centerX).pow(2)
             s2y += (it.gy - centerY).pow(2)
+            s2z += (it.gy - centerY).pow(2)
         }
 
         s2x /= bodies.size - 1
         s2y /= bodies.size - 1
+        s2z /= bodies.size - 1
 
-        return sqrt(max(s2x, s2y))
+        return sqrt(max(max(s2x, s2y), s2z))
     }
 
     fun forEachBody(action: (Body) -> Unit) {
@@ -64,37 +70,29 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
     }
 
     companion object {
-        fun createSolarSystem(): Universe {
-            return Universe(G = 6.674e-11, dt = 36000.0).apply {
-                add(Body(0.0, 0.0, 1.989e30, 0.0, 0.0)) // sun
-                add(Body(149.6e9, 0.0, 5.972e24, 0.0, 29780.0)) // earth
-                add(Body(149.6e9 + 384400000, 0.0, 7.348e22, 0.0, 29780.0 + 1022)) // moon
-            }
-        }
-
-        fun createSimpleSolarSystem(): Universe {
-            return Universe(G = 1.0, dt = 0.001).apply {
-                add(Body(0.0, 0.0, 1.0, 0.0, 0.0)) // sun
-                add(Body(1.0, 0.0, 1e-4, 0.0, 1.0)) // earth
-                add(Body(1.1, 0.0, 1e-8, 0.0, 1e-3 + 1.0)) // moon
-            }
-        }
-
         fun createDisc(): Universe {
             return Universe(G = 1.0, dt = 0.01).apply {
-                val blackHole = Body(0.0, 0.0, 1.0, 0.0, 0.0)
+                val blackHole = Body(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
                 addRotatingDisc(10000, 1.0, 1e-9, blackHole, true)
             }
         }
 
         fun createCollidingDiscs(): Universe {
-            val blackHole1 = Body(-1.5, -1.0, 10.0, 0.0, 0.0)
-            val blackHole2 = Body(1.5, -1.0, 10.0, 0.0, 0.0)
-            val blackHole3 = Body(0.0, 1.6, 10.0, 0.0, 0.0)
+            val blackHole1 = Body(-1.5, -1.0, 0.0, 10.0, 0.0, 0.0, 0.0)
+            val blackHole2 = Body(1.5, -1.0, 0.0, 10.0, 0.0, 0.0, 0.0)
+            val blackHole3 = Body(0.0, 1.6, 0.0, 10.0, 0.0, 0.0, 0.0)
             return Universe(G = 0.01, dt = 0.01, theta = 0.7).apply {
-                addRotatingDisc(10000, 1.2, 1e-4, blackHole1, false)
-                addRotatingDisc(10000, 1.2, 1e-4, blackHole2, false)
-                addRotatingDisc(10000, 1.2, 1e-4, blackHole3, false)
+                addRotatingDisc(3000, 1.2, 1e-4, blackHole1, false)
+                addRotatingDisc(3000, 1.2, 1e-4, blackHole2, false)
+                addRotatingDisc(3000, 1.2, 1e-4, blackHole3, false)
+            }
+        }
+
+        fun createSimpleSolarSystem(): Universe {
+            return Universe(G = 1.0, dt = 0.01).apply {
+                add(Body(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)) // sun
+                add(Body(1.0, 0.0, 0.0, 1e-4, 0.0, 1.0, 0.0)) // earth
+                add(Body(1.1, 0.0, 0.0, 1e-8, 0.0, 1e-3 + 1.0, 0.0)) // moon
             }
         }
 
@@ -102,62 +100,70 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
             val sigma = 0.2
 
             return Universe(G = 0.1, dt = 0.01).apply {
-                repeat(10000) {
-                    val rad = sqrt(Math.random()) * 100
-                    val arc = Math.random() * 2 * Math.PI
-                    val m = Math.random().pow(3)
+                repeat(12) {
+                    val rad = sqrt(Math.random()) * 10
+                    val polar = Math.random() * 2 * Math.PI
+                    val azimuth = Math.random() * 2 * Math.PI
+                    val m = Math.cbrt(Math.random())
 
                     val u1 = Math.random()
                     val u2 = Math.random()
-                    val r = sqrt(-2.0 * ln(u1))
-                    val theta = 2.0 * Math.PI * u2
-                    val vx = r * cos(theta) * sigma
-                    val vy = r * sin(theta) * sigma
+                    val vRad = sqrt(-2.0 * ln(u1))
+                    val vPolar = 2.0 * Math.PI * u2
+                    val vAzimuth = 2.0 * Math.PI * u2
 
                     add(
                         Body(
-                            cos(arc) * rad, sin(arc) * rad,
+                            sin(polar) * cos(azimuth) * rad,
+                            sin(polar) * sin(azimuth) * rad,
+                            cos(polar) * rad,
                             m.pow(3),
-                            vx, vy
+                            sin(vPolar) * cos(vAzimuth) * vRad,
+                            sin(vPolar) * sin(vAzimuth) * vRad,
+                            cos(vPolar) * vRad,
                         )
                     )
                 }
             }
         }
-
-        fun createParticleSuckingCloud(): Universe {
-            val distance = 100.0
-            val massBlackHole = 1000.0
-            val particleCount = 50000
-
-            return Universe(G = 0.01, dt = 0.1).apply {
-                add(Body(distance, 0.0, massBlackHole, 0.0, 0.3))
-
-                val centerBlackHole = Body(0.0, 0.0, 100.0, 0.0, 0.0)
-                addRotatingDisc(particleCount, 50.0, 1e-4, centerBlackHole, false)
-            }
-        }
-
-        fun Universe.addRotatingDisc(count: Int, rad: Double, mass: Double, center: Body, isClockwise: Boolean) {
+    }
+//
+//        fun createParticleSuckingCloud(): Universe {
+//            val distance = 100.0
+//            val massBlackHole = 1000.0
+//            val particleCount = 100000
+//
+//            return Universe(G = 0.01, dt = 0.1).apply {
+//                add(Body(distance, 0.0, massBlackHole, 0.0, 0.3))
+//
+//                val centerBlackHole = Body(0.0, 0.0, 100.0, 0.0, 0.0)
+//                addRotatingDisc(particleCount, 50.0, 1e-4, centerBlackHole, false)
+//            }
+//        }
+//
+        fun addRotatingDisc(count: Int, rad: Double, mass: Double, center: Body, isClockwise: Boolean) {
             repeat(count) {
                 val r = sqrt(Math.random()) * rad
-                val arc = Math.random() * 2 * PI
-                val x = cos(arc) * r + center.x
-                val y = sin(arc) * r + center.y
+                val polar = Math.random() * 2 * PI
+                val azimuth = Math.random() * 2 * PI
+                val x = sin(polar) * cos(azimuth) * r + center.x
+                val y = sin(polar) * sin(azimuth) * r + center.y
+                val z = cos(polar) * r + center.z
                 val v = sqrt(G * center.mass / r)
-                val vx = sin(arc) * v
-                val vy = -cos(arc) * v
+                val vx = sin(polar) * sin(azimuth) * v
+                val vy = -sin(polar) * cos(azimuth) * v
+                val vz = 0.0
 
                 if(!isClockwise) {
-                    add(Body(x, y, mass, vx + center.vx, vy + center.vy))
+                    add(Body(x, y, z, mass, vx + center.vx, vy + center.vy, vz + center.vz))
                 } else {
-                    add(Body(x, y, mass, -vx + center.vx, -vy + center.vy))
+                    add(Body(x, y, z, mass, -vx + center.vx, -vy + center.vy, -vz + center.vz))
                 }
             }
 
             add(center)
         }
-    }
+//    }
 
     /*
 

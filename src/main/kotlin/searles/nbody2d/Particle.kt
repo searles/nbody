@@ -1,4 +1,4 @@
-package searles
+package searles.nbody2d
 
 import kotlin.math.hypot
 import kotlin.math.min

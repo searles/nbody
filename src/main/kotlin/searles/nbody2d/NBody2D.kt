@@ -1,29 +1,62 @@
-package searles
+package searles.nbody2d
 
 import javafx.animation.AnimationTimer
+import javafx.application.Application
+import javafx.application.Platform
 import javafx.event.EventHandler
+import javafx.scene.Group
+import javafx.scene.Scene
 import javafx.scene.canvas.Canvas
 import javafx.scene.paint.Color
+import javafx.stage.Stage
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
-import tornadofx.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.*
 
-class MainView : View() {
+class NBody2D : Application() {
     private var isCalculationRunning: AtomicBoolean = AtomicBoolean(false)
 
     private val width = 800.0
     private val height = 800.0
 
-    val universe = Universe.createCollidingDiscs()
+    val universe = Universe.createParticleSuckingCloud()
 
-    var cx: Double = universe.centerX
-    var cy: Double = universe.centerY
-    var len: Double = universe.getStandardDeviation() * 4
+    private var cx: Double = universe.centerX
+    private var cy: Double = universe.centerY
+    private var len: Double = universe.getStandardDeviation() * 4
 
-    private val canvas = Canvas(width, height).apply {
-        onScroll = EventHandler {
+    override fun start(primaryStage: Stage) {
+        val canvas = Canvas(width, height)
+        connectCanvas(canvas)
+
+        val root = Group()
+        root.children.add(canvas)
+        val scene = Scene(root, width, height)
+        primaryStage.scene = scene
+        primaryStage.show()
+
+        val timer = object : AnimationTimer() {
+            override fun handle(now: Long) {
+                @Suppress("DeferredResultUnused")
+                GlobalScope.async {
+                    // code to run in the background
+                    if (isCalculationRunning.compareAndSet(false, true)) {
+                        universe.step()
+                        Platform.runLater {
+                            drawUniverse(canvas)
+                            isCalculationRunning.set(false)
+                        }
+                    }
+                }
+            }
+        }
+
+        timer.start()
+    }
+
+    private fun connectCanvas(canvas: Canvas) {
+        canvas.onScroll = EventHandler {
             len -= len * 0.01 * it.deltaY
         }
 
@@ -31,17 +64,17 @@ class MainView : View() {
         var x0 = 0.0
         var y0 = 0.0
 
-        onMousePressed = EventHandler { event ->
+        canvas.onMousePressed = EventHandler { event ->
             isDragged = true
             x0 = event.x
             y0 = event.y
         }
 
-        onMouseReleased = EventHandler {
+        canvas.onMouseReleased = EventHandler {
             isDragged = false
         }
 
-        onMouseDragged = EventHandler {
+        canvas.onMouseDragged = EventHandler {
             if(isDragged) {
                 val dx = it.x - x0
                 val dy = it.y - y0
@@ -55,35 +88,11 @@ class MainView : View() {
         }
     }
 
-    override val root = vbox {
-        children.addAll(
-            listOf(canvas)
-        )
+    private fun drawUniverse(canvas: Canvas) {
+        val graphicsContext = canvas.graphicsContext2D
 
-        val timer = object : AnimationTimer() {
-            override fun handle(now: Long) {
-                @Suppress("DeferredResultUnused")
-                GlobalScope.async {
-                    // code to run in the background
-                    if(isCalculationRunning.compareAndSet(false, true)) {
-                        universe.step()
-                        runLater {
-                            drawUniverse()
-                            isCalculationRunning.set(false)
-                        }
-                    }
-                }
-            }
-        }
-
-        timer.start()
-    }
-
-    private fun drawUniverse() {
-        val gc = canvas.graphicsContext2D
-
-        gc.fill = c("black")
-        gc.fillRect(0.0, 0.0, width, height)
+        graphicsContext.fill = Color.BLACK
+        graphicsContext.fillRect(0.0, 0.0, width, height)
 
         var minMass = universe.bodies.first().mass
         var maxMass = universe.bodies.first().mass
@@ -107,16 +116,16 @@ class MainView : View() {
         universe.forEachBody {
             // size varies from 0.2 to 4 using 3rd root of mass.
             val size = getSizeForMass(it.mass, minMass, maxMass)
-            gc.fill = getColorForStats(ln(it.totalForce), meanLogForce, sqrt(varianceLogForce))
+            graphicsContext.fill = getColorForStats(ln(it.totalForce), meanLogForce, sqrt(varianceLogForce))
             val vx = (it.x - cx + len / 2.0) / len * width
             val vy = (it.y - cy + len / 2.0) / len * height
-            gc.fillOval(vx, vy, size, size)
+            graphicsContext.fillOval(vx, vy, size, size)
         }
 
-        gc.fill = Color.WHITE
-        gc.fillText(universe.time.toString(), 0.0, 10.0)
+        graphicsContext.fill = Color.WHITE
+        graphicsContext.fillText(universe.time.toString(), 0.0, 10.0)
 
-        gc.fill = c("black")
+        graphicsContext.fill = Color.BLACK
     }
 
     private fun getColorForStats(x: Double, mean: Double, sigma: Double): Color {
@@ -143,7 +152,7 @@ class MainView : View() {
 
     private fun getSizeForMass(mass: Double, minMass: Double, maxMass: Double): Double {
         val minSize = 0.5
-        val maxSize = 4.0
+        val maxSize = 2.0
 
         val d = maxMass - minMass
         if(d == 0.0) return 1.0

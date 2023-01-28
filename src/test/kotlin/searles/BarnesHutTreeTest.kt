@@ -1,8 +1,9 @@
 package searles
 
-import javafx.scene.paint.Color
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import searles.nbody2d.BarnesHutTree
+import searles.nbody2d.Particle
 
 class BarnesHutTreeTest {
     @Test
