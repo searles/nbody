@@ -37,18 +37,22 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
     }
 
     companion object {
-        fun List<Body>.withMotion(vx: Double, vy: Double) {
+        fun List<Body>.withMotion(vx: Double, vy: Double): List<Body> {
             this.forEach {
                 it.vx += vx
                 it.vy += vy
             }
+
+            return this
         }
 
-        fun List<Body>.moveBy(dx: Double, dy: Double) {
+        fun List<Body>.moveBy(dx: Double, dy: Double): List<Body> {
             this.forEach {
                 it.x += dx
                 it.y += dy
             }
+
+            return this
         }
 
         fun createCollidingDiscs(): Universe {
@@ -80,7 +84,7 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
             return (0 until count).map {
                 val r = sqrt(Math.random()) * rad
                 val arc = Math.random() * 2 * Math.PI
-                val m = Math.cbrt(Math.random())
+                val m = Math.cbrt(Math.random()) * 0.14
 
                 val u1 = Math.random()
                 val u2 = Math.random()

@@ -11,6 +11,10 @@ import javafx.scene.paint.Color
 import javafx.stage.Stage
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
+import searles.nbody.nbody2d.Universe.Companion.createCloud
+import searles.nbody.nbody2d.Universe.Companion.createRotatingDisc
+import searles.nbody.nbody2d.Universe.Companion.moveBy
+import searles.nbody.nbody2d.Universe.Companion.withMotion
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.*
 
@@ -20,7 +24,13 @@ class NBody2D : Application() {
     private val width = 800.0
     private val height = 800.0
 
-    val universe = Universe.createCollidingDiscs()
+    val universe = Universe(G = 0.01, dt = 0.01).apply {
+        //addAll(createCloud(10000, -1.0, 0.1).moveBy(-2.0, 0.0).withMotion(0.0, 0.2))
+        addAll(createRotatingDisc(20000, 0.8, 0.0001,
+            Body(1.0, 0.0, 100.0, 0.0, 0.2), false))
+        addAll(createRotatingDisc(20000, 0.8, 0.0001,
+            Body(-1.0, 0.0, 200.0, 0.0, -0.2), false))
+    }
 
     private var cx: Double = universe.bodyStats.cx
     private var cy: Double = universe.bodyStats.cy

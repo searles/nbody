@@ -71,7 +71,7 @@ class Branch(
         var m = 0.0
 
         children.filterNotNull().forEach {
-            it.recalibrate() // TODO: This can be done by marking the tree nodes.
+            it.recalibrate() // XXX: Recursion must be replaced.
 
             gxm += it.gx * it.mass
             gym += it.gy * it.mass
@@ -92,6 +92,7 @@ class Branch(
             body.addForce(this, G, dt)
         } else {
             for(it in children) {
+                // XXX Recursion must be replaced
                 it?.updateForceForBody(body, theta, G, dt)
             }
         }

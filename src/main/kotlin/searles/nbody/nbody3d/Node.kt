@@ -160,7 +160,7 @@ class Body(
         vy += d0y * ft
         vz += d0z * ft
 
-        totalForce += force // XXX or 'a'?
+        totalForce += a // XXX or 'force'?
     }
 
     override fun recalibrate() {
