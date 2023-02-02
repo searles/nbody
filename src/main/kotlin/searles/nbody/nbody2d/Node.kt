@@ -71,7 +71,7 @@ class Branch(
         var m = 0.0
 
         children.filterNotNull().forEach {
-            it.recalibrate() // XXX: Recursion must be replaced.
+            it.recalibrate()
 
             gxm += it.gx * it.mass
             gym += it.gy * it.mass
@@ -102,7 +102,7 @@ class Branch(
 class Body(
     x: Double,
     y: Double,
-    override val mass: Double,
+    override var mass: Double,
     var vx: Double,
     var vy: Double
 ): Node(null, x, y) {

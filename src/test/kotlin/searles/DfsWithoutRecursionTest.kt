@@ -1,7 +1,6 @@
 package searles
 
 import org.junit.jupiter.api.Test
-import java.util.*
 
 class DfsWithoutRecursionTest {
     @Test
@@ -27,97 +26,111 @@ class DfsWithoutRecursionTest {
                 Node()
             )
 
-        dfsWithInt(tree)
+        dfsWithoutRecursion(tree)
     }
 
-    private fun dfsWithInt(root: Node) {
+    @Test
+    fun `WHEN creating a list THEN every node is traversed`() {
+        val tree = createFullBinaryTree(10)
+
+        dfsWithoutRecursion2(tree)
+    }
+
+    private fun createList(length: Int): Node {
+        var node = Node()
+
+        repeat(length - 1) {
+            node = Node(node)
+        }
+
+        return node
+    }
+
+    private fun createFullBinaryTree(depth: Int): Node {
+        if(depth <= 1) return Node()
+
+        return Node(createFullBinaryTree(depth - 1), createFullBinaryTree(depth - 1))
+    }
+
+    /*
+    def dfs(root):
+    node = root
+    while True:
+        visit(node)
+        if node.first_child:
+            node = node.first_child      # walk down
+        else:
+            while not node.next_sibling:
+                if node is root:
+                    return
+                node = node.parent       # walk up ...
+            node = node.next_sibling     # ... and right
+
+     */
+
+    private fun dfsWithoutRecursion2(root: Node) {
         var node = root
-        var position = 0 // no children processed yet
 
         while(true) {
-            // stack contains the child of child node that will be processed next.
-            val childIndex = position % (node.child.size + 1)
-            position /= (node.child.size + 1)
+            println("Preorder  ${node.label}.")
 
-            if(childIndex == 0) {
-                println("Preorder:  ${node.label}, $position")
-            }
+            val firstChild = node.child.firstOrNull()
 
-            if(childIndex < node.child.size) {
-                // go down.
-                position *= (node.child.size + 1)
-                position += childIndex + 1
-
-                node = node.child[childIndex]
-                position *= (node.child.size + 1)
+            if(firstChild != null) {
+                node = firstChild
             } else {
-                println("Postorder: ${node.label}, $position")
-                // go up
-                if(node.parent == null) return
-                node = node.parent!!
+                while(true) {
+                    println("Postorder ${node.label}")
+
+                    val nextSibling = node.parent?.child?.getOrNull(node.parent!!.child.indexOf(node) + 1)
+
+                    if(nextSibling == null) {
+                        node = node.parent ?: return
+                    } else {
+                        node = nextSibling
+                        break
+                    }
+                }
             }
         }
     }
 
-    private fun dfsWithStack(root: Node) {
+    private fun dfsWithoutRecursion(root: Node) {
+        var lastNode: Node? = null
         var node = root
-        val stack = Stack<Int>()
-        stack.push(0) // no children processed yet
 
         while(true) {
-            // stack contains the child of child node that will be processed next.
-            val childIndex = stack.pop()
+            var childIndex: Int = -1
 
-            if(childIndex == 0) {
-                println("Preorder:  ${node.label}, $stack")
+            if(lastNode == node.parent) {
+                println("Preorder  ${node.label}.")
+            } else {
+                childIndex = node.child.indexOf(lastNode)
             }
 
-            if(childIndex < node.child.size) {
-                // go down.
-                stack.push(childIndex + 1) // store current index
+            val nextSiblingIndex = childIndex + 1
 
-                node = node.child[childIndex]
-                stack.push(0) // and start at child 0.
+            if(nextSiblingIndex < node.child.size) {
+                lastNode = node
+                node = node.child[nextSiblingIndex]
             } else {
-                println("Postorder: ${node.label}, $stack")
-                // go up
-                if(node.parent == null) return
-                node = node.parent!!
+                // No more siblings
+                println("Postoder ${node.label}.")
+
+                lastNode = node
+                node = node.parent ?: return
             }
         }
     }
 
-    private fun recursiveDfs(tree: Node) {
+    private fun dfsWithRecursion(tree: Node) {
         println("Preorder:  ${tree.label}")
 
         for(child in tree.child) {
-            recursiveDfs(child)
+            dfsWithRecursion(child)
         }
 
         println("Postorder: ${tree.label}")
-    }
-
-    private fun dfs(tree: Node) {
-        var node = tree
-        val stack = Stack<Int>()
-
-        stack.push(0)
-
-        while(true) {
-            val nextChildIndex = stack.pop()
-
-            if(nextChildIndex in 0 until node.child.size) {
-                // go down
-                stack.push(nextChildIndex)
-                node = node.child[nextChildIndex]
-            } else {
-                println("Process: ${node.label} at $stack") // Post-Order.
-                if(node.parent == null) return // done.
-                // go up to next child.
-                stack.push(nextChildIndex + 1)
-                node = node.parent!!
-            }
-        }
     }
 
     class Node(vararg val child: Node) {

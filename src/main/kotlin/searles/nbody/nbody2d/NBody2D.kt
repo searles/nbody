@@ -24,12 +24,13 @@ class NBody2D : Application() {
     private val width = 800.0
     private val height = 800.0
 
-    val universe = Universe(G = 0.01, dt = 0.01).apply {
-        //addAll(createCloud(10000, -1.0, 0.1).moveBy(-2.0, 0.0).withMotion(0.0, 0.2))
-        addAll(createRotatingDisc(20000, 0.8, 0.0001,
-            Body(1.0, 0.0, 100.0, 0.0, 0.2), false))
-        addAll(createRotatingDisc(20000, 0.8, 0.0001,
-            Body(-1.0, 0.0, 200.0, 0.0, -0.2), false))
+    val universe = Universe(G = 0.0006, dt = 0.01).apply {
+        addAll(
+            createRotatingDisc(20000, 2.0, 0.0001, 10.0, true).withMotion(0.0, 0.5).moveBy(-4.0, 0.0)
+        )
+        addAll(
+            listOf(Body(0.0, 0.0, 1000.0, 0.0, 0.0))
+        )
     }
 
     private var cx: Double = universe.bodyStats.cx

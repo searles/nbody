@@ -82,9 +82,9 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
             val blackHole2 = Body(1.5, -1.0, 0.0, 10.0, 0.0, 0.0, 0.0)
             val blackHole3 = Body(0.0, 1.6, 0.0, 10.0, 0.0, 0.0, 0.0)
             return Universe(G = 0.01, dt = 0.01, theta = 0.7).apply {
-                addRotatingDisc(3000, 1.2, 1e-4, blackHole1, false)
-                addRotatingDisc(3000, 1.2, 1e-4, blackHole2, false)
-                addRotatingDisc(3000, 1.2, 1e-4, blackHole3, false)
+                addRotatingDisc(4000, 1.2, 1e-4, blackHole1, false)
+                addRotatingDisc(4000, 1.2, 1e-4, blackHole2, false)
+                addRotatingDisc(4000, 1.2, 1e-4, blackHole3, false)
             }
         }
 

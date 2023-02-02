@@ -55,36 +55,11 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
             return this
         }
 
-        fun createCollidingDiscs(): Universe {
-            val blackHole1 = Body(-3.0, 0.0, 20.0, 0.05, -0.0866)
-            val blackHole2 = Body(3.0, 0.0, 20.0, -0.05, 0.0866)
-            //val blackHole3 = Body(0.0, 1.6, 10.0, -0.1, 0.0)
-            return Universe(G = 0.01, dt = 0.01, theta = 0.7).apply {
-                addAll(createRotatingDisc(20000, 1.5, 1e-4, blackHole1, true))
-                addAll(createRotatingDisc(20000, 1.5, 1e-4, blackHole2, true))
-                //addRotatingDisc(10000, 1.2, 1e-4, blackHole3, true)
-            }
-        }
-
-        fun Universe.particleSuckingCloud(
-            count: Int,
-            massBlackHole: Double,
-            distance: Double,
-            massCenter: Double,
-            rad: Double
-        ): List<Body> {
-            val massiveBlackHole = Body(distance, 0.0, massBlackHole, 0.0, 0.3)
-            val centerBlackHole = Body(0.0, 0.0, massCenter, 0.0, 0.0)
-
-            return listOf(massiveBlackHole) +
-                    createRotatingDisc(count, rad, 1e-4, centerBlackHole, false)
-        }
-
-        fun Universe.createCloud(count: Int, rad: Double = 100.0, sigmaV: Double = 0.5): List<Body> {
+        fun createCloud(count: Int, rad: Double, maxMass: Double, sigmaV: Double): List<Body> {
             return (0 until count).map {
                 val r = sqrt(Math.random()) * rad
                 val arc = Math.random() * 2 * Math.PI
-                val m = Math.cbrt(Math.random()) * 0.14
+                val m = Math.random() * maxMass
 
                 val u1 = Math.random()
                 val u2 = Math.random()
@@ -93,32 +68,32 @@ class Universe(val G: Double, val dt: Double = 1.0, val theta: Double = 0.7) {
                 val vx = rV * cos(theta) * sigmaV
                 val vy = rV * sin(theta) * sigmaV
 
-                Body(cos(arc) * r, sin(arc) * r, m.pow(3), vx, vy)
+                Body(cos(arc) * r, sin(arc) * r, m, vx, vy)
             }
         }
 
         fun Universe.createRotatingDisc(
             count: Int,
             rad: Double,
-            mass: Double,
-            center: Body,
+            maxMass: Double,
+            centerMass: Double,
             isClockwise: Boolean
         ): List<Body> {
-            return listOf(center) + (0 until count).map {
+            return (0 until count).map {
                 val r = sqrt(Math.random()) * rad
                 val arc = Math.random() * 2 * PI
-                val x = cos(arc) * r + center.x
-                val y = sin(arc) * r + center.y
-                var v = sqrt(G * center.mass / r)
+                val x = cos(arc) * r
+                val y = sin(arc) * r
+                var v = sqrt(G * centerMass / r)
 
                 if (isClockwise) v = -v
 
                 val vx = sin(arc) * v
                 val vy = -cos(arc) * v
-                val m = Math.random() * mass
+                val m = Math.random() * maxMass
 
-                Body(x, y, m, vx + center.vx, vy + center.vy)
-            }
+                Body(x, y, m, vx, vy)
+            } + Body(0.0, 0.0, centerMass, 0.0, 0.0)
         }
     }
 }

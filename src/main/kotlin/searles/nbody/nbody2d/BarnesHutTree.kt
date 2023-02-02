@@ -75,7 +75,7 @@ class BarnesHutTree {
         body.move(dt)
 
         if(body.parent?.containsInCorrectChild(body) == false) {
-            relink(body)
+            unlink(body, true)
         }
     }
 
@@ -118,9 +118,9 @@ class BarnesHutTree {
         insert(root, body, x, y, len)
     }
 
-    private fun relink(body: Body) {
+    private fun unlink(body: Body, reinsert: Boolean) {
         if(body == root) {
-            root = null
+            // This is in fact impossible.
             return
         }
 
@@ -141,6 +141,10 @@ class BarnesHutTree {
         if(remainingChildren.size == 1) {
             attach(parent, remainingChildren.first())
             // XXX In C or other languages delete "branch"
+        }
+
+        if(!reinsert) {
+            return
         }
 
         while(parent != null) {

@@ -41,7 +41,7 @@ class NBody3D: Application() {
         //root.children.add(buildAxes())
         val scene = Scene(root, 800.0, 800.0, Color.BLACK)
 
-        setUpCamera(scene)
+        setUpCamera(scene, root)
 
         val centerX = screenWidth / 2.0
         val centerY = screenHeight / 2.0
@@ -126,7 +126,7 @@ class NBody3D: Application() {
         return axisGroup
     }
 
-    private fun setUpCamera(scene: Scene) {
+    private fun setUpCamera(scene: Scene, root: Group) {
         val camera = PerspectiveCamera()
         scene.camera = camera
 
@@ -135,47 +135,49 @@ class NBody3D: Application() {
         var y0 = 0.0
         var isDragged = false
 
-        val rotateX = Rotate(0.0, Rotate.X_AXIS)
-        val rotateY = Rotate(0.0, Rotate.Y_AXIS)
-        val rotateZ = Rotate(0.0, Rotate.Z_AXIS)
+        CameraGestureControl(camera, scene, root).setUp()
 
-        camera.transforms.apply {
-            add(rotateX)
-            add(rotateY)
-            add(rotateZ)
-        }
-
-        scene.onMousePressed = EventHandler {
-            x0 = it.sceneX
-            y0 = it.sceneY
-            isDragged = true
-        }
-
-        scene.onMouseDragged = EventHandler {
-            if(!isDragged) return@EventHandler
-
-            val dx = x0 - it.sceneX
-            val dy = y0 - it.sceneY
-
-            if(it.isShiftDown) {
-                camera.translateX += dx
-                camera.translateY += dy
-            } else {
-                rotateY.angle -= dx / 2.0
-                rotateX.angle += dy / 10.0
-            }
-
-            x0 = it.sceneX
-            y0 = it.sceneY
-        }
-
-        scene.onMouseReleased = EventHandler {
-            isDragged = false
-        }
-
-        scene.onScroll = EventHandler {
-            camera.translateZ += it.deltaY
-        }
+//        val rotateX = Rotate(0.0, Rotate.X_AXIS)
+//        val rotateY = Rotate(0.0, Rotate.Y_AXIS)
+//        val rotateZ = Rotate(0.0, Rotate.Z_AXIS)
+//
+//        camera.transforms.apply {
+//            add(rotateX)
+//            add(rotateY)
+//            add(rotateZ)
+//        }
+//
+//        scene.onMousePressed = EventHandler {
+//            x0 = it.sceneX
+//            y0 = it.sceneY
+//            isDragged = true
+//        }
+//
+//        scene.onMouseDragged = EventHandler {
+//            if(!isDragged) return@EventHandler
+//
+//            val dx = x0 - it.sceneX
+//            val dy = y0 - it.sceneY
+//
+//            if(it.isShiftDown) {
+//                camera.translateX += dx
+//                camera.translateY += dy
+//            } else {
+//                rotateY.angle -= dx / 2.0
+//                rotateX.angle += dy / 10.0
+//            }
+//
+//            x0 = it.sceneX
+//            y0 = it.sceneY
+//        }
+//
+//        scene.onMouseReleased = EventHandler {
+//            isDragged = false
+//        }
+//
+//        scene.onScroll = EventHandler {
+//            camera.translateZ += it.deltaY
+//        }
     }
 
     private fun createParticle(): Sphere {
