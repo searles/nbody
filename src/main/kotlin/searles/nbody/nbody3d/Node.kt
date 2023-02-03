@@ -1,5 +1,6 @@
 package searles.nbody.nbody3d
 
+import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -10,7 +11,7 @@ sealed class Node(var parent: Branch? = null, var x: Double, var y: Double, var 
     abstract val gz: Double
     abstract val mass: Double
 
-    abstract fun updateForce(body: Body, theta: Double, G: Double, dt: Double)
+    abstract fun updateForceForBody(body: Body, theta: Double, G: Double, dt: Double)
     abstract fun recalibrate()
 }
 
@@ -24,7 +25,7 @@ class Branch(
     override var mass: Double = 0.0
 
     fun contains(x: Double, y: Double, z: Double): Boolean {
-        return BalancedBarnesHutTree.isInside(x, y, z, this.x, this.y, this.z, this.len)
+        return BarnesHutTree.isInside(x, y, z, this.x, this.y, this.z, this.len)
     }
 
     fun containsInCorrectChild(body: Body): Boolean {
@@ -40,14 +41,13 @@ class Branch(
 
         return when {
             x <= this.x && y <= this.y && z <= this.z -> 0
-            x <= this.x && y <= this.y && z > this.z -> 1
-            x <= this.x && y > this.y && z <= this.z -> 2
-            x <= this.x && y > this.y && z > this.z -> 3
-            x > this.x && y <= this.y && z <= this.z -> 4
+            x > this.x && y <= this.y && z <= this.z -> 1
+            x > this.x && y > this.y && z <= this.z -> 2
+            x <= this.x && y > this.y && z <= this.z -> 3
+            x <= this.x && y <= this.y && z > this.z -> 4
             x > this.x && y <= this.y && z > this.z -> 5
-            x > this.x && y > this.y && z <= this.z -> 6
-            x > this.x && y > this.y && z > this.z -> 7
-            else -> error("no such case.")
+            x > this.x && y > this.y && z > this.z -> 6
+            else -> 7
         }
     }
 
@@ -65,14 +65,13 @@ class Branch(
 
             when(index0) {
                 0 -> { x -= len; y -= len; z -= len }
-                1 -> { x -= len; y -= len; z += len }
-                2 -> { x -= len; y += len; z -= len }
-                3 -> { x -= len; y += len; z += len }
-                4 -> { x += len; y -= len; z -= len }
+                1 -> { x += len; y -= len; z -= len }
+                2 -> { x += len; y += len; z -= len }
+                3 -> { x -= len; y += len; z -= len }
+                4 -> { x -= len; y -= len; z += len }
                 5 -> { x += len; y -= len; z += len }
-                6 -> { x += len; y += len; z -= len }
-                7 -> { x += len; y += len; z += len }
-                else -> error("bad index")
+                6 -> { x += len; y += len; z += len }
+                else -> { x -= len; y += len; z += len }
             }
         }
     }
@@ -98,16 +97,17 @@ class Branch(
         this.gz = gzm / m
     }
 
-    override fun updateForce(body: Body, theta: Double, G: Double, dt: Double) {
+    override fun updateForceForBody(body: Body, theta: Double, G: Double, dt: Double) {
         // This uses recursion. We will need a path of length
         // log2(2 * bodies.size - 1) to store the current path.
         // Use 32, because 2^32 > 4 Bio.
-        val distance = sqrt((gx - body.gx).pow(2) + (gy - body.gy).pow(2) + (gz - body.gz).pow(2)) + 1e-9
+        val distance = sqrt((body.gx - gx).pow(2) + (body.gy - gy).pow(2) + (body.gz - gz).pow(2))
         if (2 * len / distance < theta) {
             body.addForce(this, G, dt)
         } else {
             for(it in children) {
-                it?.updateForce(body, theta, G, dt)
+                // XXX Recursion must be replaced
+                it?.updateForceForBody(body, theta, G, dt)
             }
         }
     }
@@ -117,7 +117,7 @@ class Body(
     x: Double,
     y: Double,
     z: Double,
-    override val mass: Double,
+    override var mass: Double,
     var vx: Double,
     var vy: Double,
     var vz: Double
@@ -132,13 +132,13 @@ class Body(
         totalForce = 0.0
     }
 
-    fun step(dt: Double) {
+    fun move(dt: Double) {
         x += vx * dt
         y += vy * dt
         z += vz * dt
     }
 
-    override fun updateForce(body: Body, theta: Double, G: Double, dt: Double) {
+    override fun updateForceForBody(body: Body, theta: Double, G: Double, dt: Double) {
         body.addForce(this, G, dt)
     }
 
@@ -159,8 +159,7 @@ class Body(
         vx += d0x * ft
         vy += d0y * ft
         vz += d0z * ft
-
-        totalForce += a // XXX or 'force'?
+        totalForce += force // XXX or 'a'?
     }
 
     override fun recalibrate() {

@@ -1,28 +1,87 @@
 package searles.nbody.nbody3d
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlin.math.*
 
-class BalancedBarnesHutTree {
+class BarnesHutTree {
     private var root: Node? = null
+    private val bodies = mutableListOf<Body>()
 
-    val gx: Double get() = root?.gx ?: 0.0
-    val gy: Double get() = root?.gy ?: 0.0
-    val gz: Double get() = root?.gz ?: 0.0
+    fun getBodyStats(): BodyStats {
+        val cx = bodies.sumOf { it.x } / bodies.size
+        val cy = bodies.sumOf { it.y } / bodies.size
+        val cz = bodies.sumOf { it.z } / bodies.size
+        val s2x = bodies.sumOf { (it.x - cx).pow(2) }
+        val s2y = bodies.sumOf { (it.y - cy).pow(2) }
+        val s2z = bodies.sumOf { (it.z - cz).pow(2) }
 
-    fun updateForce(body: Body, G: Double, dt: Double, theta: Double) {
-        body.resetTotalForce()
-        root?.updateForce(body, theta, G, dt)
+        val minMass = bodies.minOfOrNull { it.mass } ?: 0.0
+        val maxMass = bodies.maxOfOrNull { it.mass } ?: 1.0
+
+        var meanLogForce = 0.0
+        var varianceLogForce = 0.0
+        var n = 0
+
+        forEachBody {
+            n++
+            val logForce = ln(it.totalForce)
+
+            varianceLogForce = (n - 1.0) / n * (varianceLogForce + meanLogForce.pow(2)) + logForce.pow(2) / n
+            meanLogForce = (n - 1.0) / n * meanLogForce + logForce / n
+            varianceLogForce -= meanLogForce.pow(2)
+        }
+
+
+        return BodyStats(cx, cy, cz, s2x, s2y, s2z, minMass, maxMass, meanLogForce, varianceLogForce)
     }
 
-    fun step(body: Body, dt: Double) {
-        body.step(dt)
-
-        if(body.parent?.containsInCorrectChild(body) == false) {
-            relink(body)
-        }
+    fun forEachBody(action: (Body) -> Unit) {
+        bodies.forEach { action(it) }
     }
 
     fun add(body: Body) {
+        bodies.add(body)
+        insert(body)
+    }
+
+    suspend fun step(G: Double, dt: Double, theta: Double) {
+        // run in parallel
+        val chunkSize = 500
+        val chunks = bodies.chunked(chunkSize)
+
+        coroutineScope {
+            root?.recalibrate()
+
+            val jobs = chunks.map { chunk ->
+                async {
+                    chunk.forEach { updateForce(it, G, dt, theta) }
+                }
+            }
+
+            jobs.awaitAll()
+        }
+
+        for(body in bodies) {
+            move(body, dt) // not in parallel because it modifies the tree.
+        }
+    }
+
+    private fun updateForce(body: Body, G: Double, dt: Double, theta: Double) {
+        body.resetTotalForce()
+        root?.updateForceForBody(body, theta, G, dt)
+    }
+
+    private fun move(body: Body, dt: Double) {
+        body.move(dt)
+
+        if(body.parent?.containsInCorrectChild(body) == false) {
+            unlink(body, true)
+        }
+    }
+
+    private fun insert(body: Body) {
         if(root == null) {
             root = body
             return
@@ -67,9 +126,9 @@ class BalancedBarnesHutTree {
         insert(root, body, x, y, z, len)
     }
 
-    private fun relink(body: Body) {
+    private fun unlink(body: Body, reinsert: Boolean) {
         if(body == root) {
-            root = null
+            // This is in fact impossible.
             return
         }
 
@@ -92,6 +151,10 @@ class BalancedBarnesHutTree {
             // XXX In C or other languages delete "branch"
         }
 
+        if(!reinsert) {
+            return
+        }
+
         while(parent != null) {
             if(parent.contains(body.x, body.y, body.z)) {
                 insert(parent, body, parent.x, parent.y, parent.z, parent.len)
@@ -101,18 +164,18 @@ class BalancedBarnesHutTree {
             parent = parent.parent
         }
 
-        // was not inserted
-        add(body)
+        // was not inserted, maybe we need a new root.
+        insert(body)
     }
 
     private fun insert(node: Node?, body: Body, x: Double, y: Double, z: Double, len: Double) {
-        require(root != null)
-
         var node = node
         var x = x
         var y = y
         var z = z
         var len = len
+
+        require(root != null)
 
         var parent: Branch? = null
 
@@ -167,10 +230,6 @@ class BalancedBarnesHutTree {
         }
     }
 
-    fun recalibrate() {
-        root?.recalibrate()
-    }
-
     companion object {
         fun isInside(x: Double, y: Double, z: Double, x0: Double, y0: Double, z0: Double, len: Double): Boolean {
             return x0 - len <= x && x <= x0 + len
@@ -179,3 +238,10 @@ class BalancedBarnesHutTree {
         }
     }
 }
+
+data class BodyStats(
+    val cx: Double, val cy: Double, val cz: Double,
+    val s2x: Double, val s2y: Double, val s2z: Double,
+    val minMass: Double, val maxMass: Double,
+    val meanLogForce: Double, val varianceLogForce: Double,
+)

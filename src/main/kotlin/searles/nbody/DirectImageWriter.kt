@@ -13,9 +13,13 @@ import javafx.stage.Stage
 import kotlin.math.*
 
 abstract class DirectImageWriter : Application() {
+
     private var buffer = PixelBuffer(800, 800)
     private lateinit var backBuffer: WritableImage
     private lateinit var backBufferWriter: PixelWriter
+
+    val width get() = buffer.width
+    val height get() = buffer.height
 
     override fun start(stage: Stage) {
         val root = StackPane()
@@ -39,18 +43,21 @@ abstract class DirectImageWriter : Application() {
             updateImageBinding(imageView)
         }
 
-        stage.show()
+        connectControls(scene)
 
-        val format = PixelFormat.getIntArgbInstance()
+        stage.show()
 
         val timer: AnimationTimer = object : AnimationTimer() {
             override fun handle(now: Long) {
                 animationStep(now, buffer)
-                backBufferWriter.setPixels(0, 0, buffer.width, buffer.height, format, buffer.pixels, 0, buffer.width)
             }
         }
 
         timer.start()
+    }
+
+    protected fun updateView() {
+        backBufferWriter.setPixels(0, 0, buffer.width, buffer.height, PixelFormat.getIntArgbInstance(), buffer.pixels, 0, buffer.width)
     }
 
     private fun updateImageBinding(imageView: ImageView) {
@@ -60,6 +67,7 @@ abstract class DirectImageWriter : Application() {
     }
 
     abstract fun animationStep(now: Long, pixelBuffer: PixelBuffer)
+    open fun connectControls(scene: Scene) {}
 }
 
 class PixelBuffer(var width: Int, var height: Int) {
@@ -83,12 +91,33 @@ class PixelBuffer(var width: Int, var height: Int) {
         }
     }
 
+    fun set(x: Int, y: Int, color: Int, alpha: Double) {
+        pixels[x + y * width] = alphaBlend(color, pixels[x + y * width], alpha)
+    }
+
     operator fun get(x: Int, y: Int): Int {
         if(x in 0 until width && y in 0 until height) {
             return pixels[x + y * width]
         }
 
         return 0
+    }
+
+    fun alphaBlend(color1: Int, color2: Int, alpha: Double): Int {
+        // alpha == 1 shows color1.
+        val red1 = (color1 shr 16 and 0xff) / 255.0
+        val green1 = (color1 shr 8 and 0xff) / 255.0
+        val blue1 = (color1 and 0xff) / 255.0
+
+        val red2 = (color2 shr 16 and 0xff) / 255.0
+        val green2 = (color2 shr 8 and 0xff) / 255.0
+        val blue2 = (color2 and 0xff) / 255.0
+
+        val red = (1 - alpha) * red2 + alpha * red1
+        val green = (1 - alpha) * green2 + alpha * green1
+        val blue = (1 - alpha) * blue2 + alpha * blue1
+
+        return (255 shl 24) or ((255 * red).toInt() shl 16) or ((255 * green).toInt() shl 8) or (255 * blue).toInt()
     }
 
     fun drawCircle(cx: Double, cy: Double, rad: Double, color: Int) {
@@ -99,8 +128,11 @@ class PixelBuffer(var width: Int, var height: Int) {
 
         for(y in y0 .. y1) {
             for(x in x0 .. x1) {
-                if((x - cx).pow(2) + (y - cy).pow(2) <= rad.pow(2)) {
+                val d2 = (x - cx).pow(2) + (y - cy).pow(2)
+                if(d2 <= rad.pow(2)) {
                     set(x, y, color)
+                } else if(d2 <= (rad + 1).pow(2)) {
+                    set(x, y, color, 1 - sqrt(d2) + rad)
                 }
             }
         }
