@@ -5,6 +5,7 @@ import javafx.event.EventHandler
 import javafx.scene.Scene
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
+import searles.nbody.Commons
 import searles.nbody.Commons.getColorForStats
 import searles.nbody.Commons.getSizeForMass
 import searles.nbody.DirectImageWriter
@@ -18,21 +19,19 @@ import kotlin.math.*
 class NBody2D : DirectImageWriter() {
     private var isCalculationRunning: AtomicBoolean = AtomicBoolean(false)
 
-    val universe = Universe(G = 0.0006, dt = 0.01).apply {
+    private val universe = Universe(G = 0.0006, dt = 0.1).apply {
         addAll(
-            createRotatingDisc(20000, 1.0, 0.01, 100.0, true).withMotion(0.0, 0.01).moveBy(-2.0, 0.0)
+            createRotatingDisc(20000, 1.0, 0.001, 100.0, true).withMotion(0.0, 0.06).moveBy(-2.0, 0.0)
         )
         addAll(
-            createRotatingDisc(20000, 1.0, 0.01, 100.0, true).withMotion(0.0, -0.01).moveBy(2.0, 0.0)
+            createRotatingDisc(20000, 1.0, 0.001, 100.0, true).withMotion(0.0, -0.06).moveBy(2.0, 0.0)
         )
     }
 
-    private var cx: Double = universe.bodyStats.cx
-    private var cy: Double = universe.bodyStats.cy
-    private var len: Double = sqrt(max(universe.bodyStats.s2x, universe.bodyStats.s2y))
-
-    private val lenX get() = if(width < height) len else len * width / height
-    private val lenY get() = if(width > height) len else len * height / width
+    private var viewMatrix = Commons.translate(width / 2.0, height / 2.0)
+        .multiply(Commons.scale2D(max(width / 2.0, height / 2.0)))
+        .multiply(Commons.translate(universe.bodyStats.cx, universe.bodyStats.cy))
+        .multiply(Commons.scale2D(0.5 / sqrt(max(universe.bodyStats.s2x, universe.bodyStats.s2y))))
 
     override fun animationStep(now: Long, pixelBuffer: PixelBuffer) {
         @Suppress("DeferredResultUnused")
@@ -50,7 +49,10 @@ class NBody2D : DirectImageWriter() {
 
     override fun connectControls(scene: Scene) {
         scene.onScroll = EventHandler {
-            len -= len * 0.01 * it.deltaY
+            viewMatrix = Commons.translate(it.x, it.y)
+                .multiply(Commons.scale2D(1 + 0.01 * it.deltaY))
+                .multiply(Commons.translate(-it.x, -it.y))
+                .multiply(viewMatrix)
         }
 
         var isDragged = false
@@ -75,22 +77,28 @@ class NBody2D : DirectImageWriter() {
                 x0 = it.x
                 y0 = it.y
 
-                cx -= (dx / width) * lenX
-                cy -= (dy / height) * lenY
+                viewMatrix = Commons.translate(dx, dy).multiply(viewMatrix)
             }
         }
     }
 
     private fun drawUniverse(pixelBuffer: PixelBuffer) {
         pixelBuffer.fill(0xff000000.toInt())
+        val pt = doubleArrayOf(0.0, 0.0, 1.0)
 
         universe.forEachBody {
             // size varies from 0.2 to 4 using 3rd root of mass.
             val size = getSizeForMass(it.mass, universe.bodyStats.minMass, universe.bodyStats.maxMass)
-            val vx = (it.x - cx + lenX / 2.0) / lenX * pixelBuffer.width
-            val vy = (it.y - cy + lenY / 2.0) / lenY * pixelBuffer.height
             val color = getColorForStats(ln(it.totalForce), universe.bodyStats.meanLogForce, sqrt(universe.bodyStats.varianceLogForce))
-            pixelBuffer.drawCircle(vx, vy, size, color)
+
+            pt[0] = it.x
+            pt[1] = it.y
+
+            val resultVector = viewMatrix.operate(pt)
+
+            //val vx = (it.x - cx + lenX / 2.0) / lenX * pixelBuffer.width
+            //val vy = (it.y - cy + lenY / 2.0) / lenY * pixelBuffer.height
+            pixelBuffer.drawCircle(resultVector[0], resultVector[1], size, color)
         }
     }
 }

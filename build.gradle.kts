@@ -23,7 +23,7 @@ dependencies {
     implementation("org.tensorflow:tensorflow-core-platform-gpu:0.3.0")
     implementation("org.openjfx:javafx-base:14.0.1")
     implementation("org.openjfx:javafx-graphics:14.0.1")
-    implementation("org.apache.commons:commons-math3:3.7")
+    implementation("org.apache.commons:commons-math3:3.6.1")
     compileOnly("javax.annotation:javax.annotation-api:1.3.2")
     compileOnly("org.jetbrains:annotations:13.0")
     testImplementation(kotlin("test"))

@@ -8,22 +8,28 @@ import kotlinx.coroutines.async
 import searles.nbody.Commons
 import searles.nbody.DirectImageWriter
 import searles.nbody.PixelBuffer
+import searles.nbody.nbody3d.Universe.Companion.createGalaxy
+import searles.nbody.nbody3d.Universe.Companion.createRotatingCloud
+import searles.nbody.nbody3d.Universe.Companion.moveBy
+import searles.nbody.nbody3d.Universe.Companion.withMotion
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.*
 
 class NBody3D: DirectImageWriter() {
     private var isCalculationRunning: AtomicBoolean = AtomicBoolean(false)
-    private val universe = Universe(G = 0.006, dt = 0.01).apply {
-        this.addAll(Universe.createCloud(10000, 1.0, 0.1, 0.1))
+    private val universe = Universe(G = 0.006, dt = 0.001).apply {
+//        this.addAll(createRotatingCloud(20000, 4.0, 0.000001, 50.0).withMotion(0.1, 0.4, -0.1).moveBy(-6.0, 0.0, 0.0))
+//        this.addAll(createRotatingCloud(20000, 4.0, 0.000001, 50.0).withMotion(0.0, -0.4, 0.1).moveBy(6.0, 0.0, 0.0))
+        addAll(listOf(Body(-2.0, -1.0, 0.0, 1000.0, 0.0, 0.2, 0.0)))
+        addAll(createGalaxy(20000, 1.0, 0.01, 0.5).moveBy(-2.0, -1.0, 0.0).withMotion(0.0, 0.2, 0.0))
+        addAll(listOf(Body(2.0, -1.0, 0.0, 1000.0, 0.0, -0.2, 0.0)))
+        addAll(createGalaxy(20000, 1.0, 0.01, 0.5).moveBy(2.0, -1.0, 0.0).withMotion(0.0, -0.2, 0.0))
+        addAll(listOf(Body(0.0, 1.0, 0.0, 1000.0, 0.2, 0.0, 0.0)))
+        addAll(createGalaxy(20000, 1.0, 0.01, 0.5).moveBy(0.0, 1.0, 0.0).withMotion(0.2, 0.0, 0.0))
     }
 
-    private var cx: Double = universe.bodyStats.cx
-    private var cy: Double = universe.bodyStats.cy
-    private var cz: Double = universe.bodyStats.cz
-    private var len: Double = sqrt(max(universe.bodyStats.s2x, universe.bodyStats.s2y))
-
-    private val lenX get() = if(width < height) len else len * width / height
-    private val lenY get() = if(width > height) len else len * height / width
+    private var viewMatrix = Commons.translate(width / 2.0, height / 2.0, 0.0)
+        .multiply(Commons.scale3D(max(width / 2.0, height / 2.0)))
 
     override fun animationStep(now: Long, pixelBuffer: PixelBuffer) {
         @Suppress("DeferredResultUnused")
@@ -43,33 +49,49 @@ class NBody3D: DirectImageWriter() {
     private fun drawUniverse(pixelBuffer: PixelBuffer) {
         pixelBuffer.fill(0xff000000.toInt())
 
+        val pt = doubleArrayOf(0.0, 0.0, 0.0, 1.0)
+
         universe.forEachBody {
             // size varies from 0.2 to 4 using 3rd root of mass.
             val size = Commons.getSizeForMass(it.mass, universe.bodyStats.minMass, universe.bodyStats.maxMass)
-            val vx = (it.x - cx + lenX / 2.0) / lenX * pixelBuffer.width
-            val vy = (it.y - cy + lenY / 2.0) / lenY * pixelBuffer.height
-
             val color = Commons.getColorForStats(
                 ln(it.totalForce),
                 universe.bodyStats.meanLogForce,
                 sqrt(universe.bodyStats.varianceLogForce)
             )
 
-            pixelBuffer.drawCircle(vx, vy, size, color)
+            pt[0] = it.x
+            pt[1] = it.y
+            pt[2] = it.z
+
+            val resultVector = viewMatrix.operate(pt)
+
+
+            // TODO Perspective?
+
+            pixelBuffer.drawCircle(resultVector[0], resultVector[1], size, color)
         }
     }
 
     override fun connectControls(scene: Scene) {
         scene.onScroll = EventHandler {
-            len -= len * 0.01 * it.deltaY
+            viewMatrix = Commons.translate(it.x, it.y, 0.0)
+                .multiply(Commons.scale3D(1 + 0.01 * it.deltaY))
+                .multiply(Commons.translate(-it.x, -it.y, 0.0))
+                .multiply(viewMatrix)
         }
 
         var isDragged = false
+        var startX = 0.0
+        var startY = 0.0
+
         var x0 = 0.0
         var y0 = 0.0
 
         scene.onMousePressed = EventHandler { event ->
             isDragged = true
+            startX = event.x
+            startY = event.y
             x0 = event.x
             y0 = event.y
         }
@@ -79,15 +101,21 @@ class NBody3D: DirectImageWriter() {
         }
 
         scene.onMouseDragged = EventHandler {
-            if(isDragged) {
-                val dx = it.x - x0
-                val dy = it.y - y0
+            if(!isDragged) return@EventHandler
 
-                x0 = it.x
-                y0 = it.y
+            val dx = it.x - x0
+            val dy = it.y - y0
 
-                cx -= (dx / width) * lenX
-                cy -= (dy / height) * lenY
+            x0 = it.x
+            y0 = it.y
+
+            if(it.isShiftDown) {
+                viewMatrix = Commons.translate(dx, dy, 0.0).multiply(viewMatrix)
+            } else {
+                viewMatrix = Commons.translate(startX, startY, 0.0)
+                    .multiply(Commons.rotate(dx, dy, 0.0))
+                    .multiply(Commons.translate(-startX, -startY, 0.0))
+                    .multiply(viewMatrix)
             }
         }
     }

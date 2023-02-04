@@ -12,8 +12,8 @@ class BarnesHutTree {
     fun getBodyStats(): BodyStats {
         val cx = bodies.sumOf { it.x } / bodies.size
         val cy = bodies.sumOf { it.y } / bodies.size
-        val s2x = bodies.sumOf { (it.x - cx).pow(2) }
-        val s2y = bodies.sumOf { (it.y - cy).pow(2) }
+        val s2x = bodies.sumOf { (it.x - cx).pow(2) } / (bodies.size - 1)
+        val s2y = bodies.sumOf { (it.y - cy).pow(2) } / (bodies.size - 1)
 
         val minMass = bodies.minOfOrNull { it.mass } ?: 0.0
         val maxMass = bodies.maxOfOrNull { it.mass } ?: 1.0
@@ -30,7 +30,6 @@ class BarnesHutTree {
             meanLogForce = (n - 1.0) / n * meanLogForce + logForce / n
             varianceLogForce -= meanLogForce.pow(2)
         }
-
 
         return BodyStats(cx, cy, s2x, s2y, minMass, maxMass, meanLogForce, varianceLogForce)
     }
