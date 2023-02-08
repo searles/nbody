@@ -9,22 +9,22 @@ class BarnesHutTree {
     private var root: Node? = null
     private val bodies = mutableListOf<Body>()
 
-    fun getBodyStats(): BodyStats {
-        val cx = bodies.sumOf { it.x } / bodies.size
-        val cy = bodies.sumOf { it.y } / bodies.size
-        val cz = bodies.sumOf { it.z } / bodies.size
-        val s2x = bodies.sumOf { (it.x - cx).pow(2) }
-        val s2y = bodies.sumOf { (it.y - cy).pow(2) }
-        val s2z = bodies.sumOf { (it.z - cz).pow(2) }
+    fun getStats(): Stats {
+        val cx = bodies.sumOf { it.particle.pt.pos.x } / bodies.size
+        val cy = bodies.sumOf { it.particle.pt.pos.y } / bodies.size
+        val cz = bodies.sumOf { it.particle.pt.pos.z } / bodies.size
+        val s2x = bodies.sumOf { (it.particle.pt.pos.x - cx).pow(2) }
+        val s2y = bodies.sumOf { (it.particle.pt.pos.y - cy).pow(2) }
+        val s2z = bodies.sumOf { (it.particle.pt.pos.z - cz).pow(2) }
 
-        val minMass = bodies.minOfOrNull { it.mass } ?: 0.0
-        val maxMass = bodies.maxOfOrNull { it.mass } ?: 1.0
+        val minMass = bodies.minOfOrNull { it.particle.pt.mass } ?: 0.0
+        val maxMass = bodies.maxOfOrNull { it.particle.pt.mass } ?: 1.0
 
         var meanLogForce = 0.0
         var varianceLogForce = 0.0
         var n = 0
 
-        forEachBody {
+        forEachParticle {
             n++
             val logForce = ln(it.totalForce)
 
@@ -34,14 +34,15 @@ class BarnesHutTree {
         }
 
 
-        return BodyStats(cx, cy, cz, s2x, s2y, s2z, minMass, maxMass, meanLogForce, varianceLogForce)
+        return Stats(cx, cy, cz, s2x, s2y, s2z, minMass, maxMass, meanLogForce, varianceLogForce)
     }
 
-    fun forEachBody(action: (Body) -> Unit) {
-        bodies.forEach { action(it) }
+    fun forEachParticle(action: (Particle) -> Unit) {
+        bodies.forEach { action(it.particle) }
     }
 
-    fun add(body: Body) {
+    fun add(particle: Particle) {
+        val body = Body(particle)
         bodies.add(body)
         insert(body)
     }
@@ -51,30 +52,32 @@ class BarnesHutTree {
         val chunkSize = 500
         val chunks = bodies.chunked(chunkSize)
 
-        coroutineScope {
-            root?.recalibrate()
-
-            val jobs = chunks.map { chunk ->
-                async {
-                    chunk.forEach { updateForce(it, G, dt, theta) }
-                }
-            }
-
-            jobs.awaitAll()
-        }
+        root?.recalibrate()
+        bodies.forEach { updateForce(it.particle, G, theta) }
+//        coroutineScope {
+//            root?.recalibrate()
+//
+//            val jobs = chunks.map { chunk ->
+//                async {
+//                    chunk.forEach { updateForce(it.particle, G, theta) }
+//                }
+//            }
+//
+//            jobs.awaitAll()
+//        }
 
         for(body in bodies) {
             move(body, dt) // not in parallel because it modifies the tree.
         }
     }
 
-    private fun updateForce(body: Body, G: Double, dt: Double, theta: Double) {
-        body.resetTotalForce()
-        root?.updateForceForBody(body, theta, G, dt)
+    private fun updateForce(particle: Particle, G: Double, theta: Double) {
+        particle.resetTotalForce()
+        root?.updateForceForParticle(particle, theta, G)
     }
 
     private fun move(body: Body, dt: Double) {
-        body.move(dt)
+        body.particle.move(dt)
 
         if(body.parent?.containsInCorrectChild(body) == false) {
             unlink(body, true)
@@ -87,43 +90,37 @@ class BarnesHutTree {
             return
         }
 
-        var x: Double
-        var y: Double
-        var z: Double
+        val center = Vec()
         var len: Double
 
         if(root is Body) {
             // 1 node in total
             val b = root as Body
-            len = max(max(abs(body.x - b.x), abs(body.y - b.y)), abs(body.z - b.z)) * 1.00000000001 // makes rounding errors unlikely.
-            x = (body.x + b.x) / 2
-            y = (body.y + b.y) / 2
-            z = (body.z + b.z) / 2
+            center.setToMiddle(body.particle.pt.pos, b.particle.pt.pos)
+            len = body.particle.pt.pos.manhattanDistance(b.particle.pt.pos) * 1.00000000001 // makes rounding errors unlikely.
         } else {
             val branch = root as Branch
 
-            x = branch.x
-            y = branch.y
-            z = branch.z
+            center.setTo(branch.center)
             len = branch.len
 
             // Expand if necessary
-            while(!isInside(body.x, body.y, body.z, x, y, z, len)) {
+            while(!isInside(body.particle.pt.pos, center, len)) {
                 // opposite of 'shrink'
-                if(body.x <= x) x -= len
-                else x += len
+                if(body.particle.pt.pos.x <= center.x) center.x -= len
+                else center.x += len
 
-                if(body.y <= y) y -= len
-                else y += len
+                if(body.particle.pt.pos.y <= center.y) center.y -= len
+                else center.y += len
 
-                if(body.z <= z) z -= len
-                else z += len
+                if(body.particle.pt.pos.z <= center.z) center.z -= len
+                else center.z += len
 
                 len *= 2
             }
         }
 
-        insert(root, body, x, y, z, len)
+        insert(root, body, center, len)
     }
 
     private fun unlink(body: Body, reinsert: Boolean) {
@@ -156,8 +153,8 @@ class BarnesHutTree {
         }
 
         while(parent != null) {
-            if(parent.contains(body.x, body.y, body.z)) {
-                insert(parent, body, parent.x, parent.y, parent.z, parent.len)
+            if(parent.contains(body.particle.pt.pos)) {
+                insert(parent, body, parent.center.copy(), parent.len)
                 return
             }
 
@@ -168,11 +165,9 @@ class BarnesHutTree {
         insert(body)
     }
 
-    private fun insert(node: Node?, body: Body, x: Double, y: Double, z: Double, len: Double) {
+    private fun insert(node: Node?, body: Body, center: Vec, len: Double) {
+        // node = current node in iteration. body is inserted at the current position of node or below it.
         var node = node
-        var x = x
-        var y = y
-        var z = z
         var len = len
 
         require(root != null)
@@ -180,25 +175,20 @@ class BarnesHutTree {
         var parent: Branch? = null
 
         while(true) {
-            require(isInside(body.x, body.y, body.z, x, y, z, len))
+            require(node == null || isInside(node.center, center, len))
+            require(isInside(body.particle.pt.pos, center, len))
 
             if(node == null) {
                 attach(parent, body)
                 return
             }
 
-            if(node is Body) {
-                if(node.x == body.x && node.y == body.y && node.z == body.z) {
-                    // XXX This is the proper place for a collision detection
-                    // XXX In this case we assume that this practically never happens.
-                    // XXX Alternative: Add masses
-                    return
-                }
-            }
+            // XXX This is the proper place for a collision detection
+            // XXX In this case we assume that this practically never happens.
 
-            if(node is Body || !(node as Branch).contains(body.x, body.y, body.z)) {
-                val branch = Branch(x, y, z, len).apply {
-                    shrinkForDistinctChildren(node!!.x, node!!.y, node!!.z, body.x, body.y, body.z)
+            if(node is Body || !(node as Branch).contains(body.particle.pt.pos)) {
+                val branch = Branch(center, len).apply {
+                    shrinkForDistinctChildren(node!!.center, body.particle.pt.pos)
                     attach(this, node!!)
                     attach(this, body)
                 }
@@ -208,15 +198,15 @@ class BarnesHutTree {
             }
 
             // XXX Rounding error if x == node.x and y == node.y.
-            require(node.contains(body.x, body.y, body.z)) // node is Branch.
+            require(node.contains(body.particle.pt.pos)) // node is Branch.
 
             len = node.len / 2
-            x = if(body.x <= node.x) node.x - len else node.x + len
-            y = if(body.y <= node.y) node.y - len else node.y + len
-            z = if(body.z <= node.z) node.z - len else node.z + len
+            center.x = if(body.particle.pt.pos.x <= node.center.x) node.center.x - len else node.center.x + len
+            center.y = if(body.particle.pt.pos.y <= node.center.y) node.center.y - len else node.center.y + len
+            center.z = if(body.particle.pt.pos.z <= node.center.z) node.center.z - len else node.center.z + len
 
             parent = node
-            node = node.children[node.indexOf(body.x, body.y, body.z)]
+            node = node.children[node.indexOf(body.particle.pt.pos)]
         }
     }
 
@@ -226,20 +216,18 @@ class BarnesHutTree {
         if (parent == null) {
             root = node
         } else {
-            parent.children[parent.indexOf(node.x, node.y, node.z)] = node
+            parent.children[parent.indexOf(node.center)] = node
         }
     }
 
     companion object {
-        fun isInside(x: Double, y: Double, z: Double, x0: Double, y0: Double, z0: Double, len: Double): Boolean {
-            return x0 - len <= x && x <= x0 + len
-                    && y0 - len <= y && y <= y0 + len
-                    && z0 - len <= z && z <= z0 + len
+        fun isInside(pt: Vec, center: Vec, len: Double): Boolean {
+            return pt.manhattanDistance(center) <= len
         }
     }
 }
 
-data class BodyStats(
+data class Stats(
     val cx: Double, val cy: Double, val cz: Double,
     val s2x: Double, val s2y: Double, val s2z: Double,
     val minMass: Double, val maxMass: Double,

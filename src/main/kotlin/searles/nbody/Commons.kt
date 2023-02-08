@@ -39,7 +39,7 @@ object Commons {
 
     fun getSizeForMass(mass: Double, minMass: Double, maxMass: Double): Double {
         val minSize = 0.25
-        val maxSize = 2.0
+        val maxSize = 1.0
 
         val d = maxMass - minMass
         if(d == 0.0) return 1.0

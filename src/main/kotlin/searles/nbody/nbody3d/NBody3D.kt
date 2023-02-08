@@ -8,24 +8,21 @@ import kotlinx.coroutines.async
 import searles.nbody.Commons
 import searles.nbody.DirectImageWriter
 import searles.nbody.PixelBuffer
-import searles.nbody.nbody3d.Universe.Companion.createGalaxy
-import searles.nbody.nbody3d.Universe.Companion.createRotatingCloud
-import searles.nbody.nbody3d.Universe.Companion.moveBy
-import searles.nbody.nbody3d.Universe.Companion.withMotion
+import searles.nbody.nbody3d.Universe.Companion.createBall
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.*
 
 class NBody3D: DirectImageWriter() {
     private var isCalculationRunning: AtomicBoolean = AtomicBoolean(false)
-    private val universe = Universe(G = 0.006, dt = 0.001).apply {
-//        this.addAll(createRotatingCloud(20000, 4.0, 0.000001, 50.0).withMotion(0.1, 0.4, -0.1).moveBy(-6.0, 0.0, 0.0))
-//        this.addAll(createRotatingCloud(20000, 4.0, 0.000001, 50.0).withMotion(0.0, -0.4, 0.1).moveBy(6.0, 0.0, 0.0))
-        addAll(listOf(Body(-2.0, -1.0, 0.0, 1000.0, 0.0, 0.2, 0.0)))
-        addAll(createGalaxy(20000, 1.0, 0.01, 0.5).moveBy(-2.0, -1.0, 0.0).withMotion(0.0, 0.2, 0.0))
-        addAll(listOf(Body(2.0, -1.0, 0.0, 1000.0, 0.0, -0.2, 0.0)))
-        addAll(createGalaxy(20000, 1.0, 0.01, 0.5).moveBy(2.0, -1.0, 0.0).withMotion(0.0, -0.2, 0.0))
-        addAll(listOf(Body(0.0, 1.0, 0.0, 1000.0, 0.2, 0.0, 0.0)))
-        addAll(createGalaxy(20000, 1.0, 0.01, 0.5).moveBy(0.0, 1.0, 0.0).withMotion(0.2, 0.0, 0.0))
+    private val universe = Universe(G = 1.0, dt = 0.001, theta = 2.0).apply {
+        val particleCount = 50000
+        val massPerParticle = 1e-3
+        val massBlackHole = 100.0
+//        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(-4.0, 0.0, 0.0).withMotion(0.0, -4.0, 0.0))
+//        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(0.0, -4.0, 0.0).withMotion(4.0, 0.0, 0.0))
+//        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(4.0, 0.0, 0.0).withMotion(0.0, 4.0, 0.0))
+//        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(0.0, 4.0, 0.0).withMotion(-4.0, 0.0, 0.0))
+        this.addAll(createBall(particleCount, 1.0, massPerParticle))
     }
 
     private var viewMatrix = Commons.translate(width / 2.0, height / 2.0, 0.0)
@@ -36,10 +33,15 @@ class NBody3D: DirectImageWriter() {
         GlobalScope.async {
             // code to run in the background
             if (isCalculationRunning.compareAndSet(false, true)) {
-                universe.step()
-                Platform.runLater {
-                    drawUniverse(pixelBuffer)
-                    updateView()
+                try {
+                    universe.step()
+                    Platform.runLater {
+                        drawUniverse(pixelBuffer)
+                        updateView()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
                     isCalculationRunning.set(false)
                 }
             }
@@ -51,18 +53,18 @@ class NBody3D: DirectImageWriter() {
 
         val pt = doubleArrayOf(0.0, 0.0, 0.0, 1.0)
 
-        universe.forEachBody {
+        universe.forEachParticle {
             // size varies from 0.2 to 4 using 3rd root of mass.
-            val size = Commons.getSizeForMass(it.mass, universe.bodyStats.minMass, universe.bodyStats.maxMass)
+            val size = Commons.getSizeForMass(it.pt.mass, universe.stats.minMass, universe.stats.maxMass)
             val color = Commons.getColorForStats(
                 ln(it.totalForce),
-                universe.bodyStats.meanLogForce,
-                sqrt(universe.bodyStats.varianceLogForce)
+                universe.stats.meanLogForce,
+                sqrt(universe.stats.varianceLogForce)
             )
 
-            pt[0] = it.x
-            pt[1] = it.y
-            pt[2] = it.z
+            pt[0] = it.pt.pos.x
+            pt[1] = it.pt.pos.y
+            pt[2] = it.pt.pos.z
 
             val resultVector = viewMatrix.operate(pt)
 

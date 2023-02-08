@@ -1,60 +1,45 @@
 package searles.nbody.nbody3d
 
-import kotlin.math.hypot
-import kotlin.math.min
-import kotlin.math.pow
-import kotlin.math.sqrt
-
-sealed class Node(var parent: Branch? = null, var x: Double, var y: Double, var z: Double) {
-    abstract val gx: Double
-    abstract val gy: Double
-    abstract val gz: Double
-    abstract val mass: Double
-
-    abstract fun updateForceForBody(body: Body, theta: Double, G: Double, dt: Double)
+sealed class Node(var parent: Branch? = null, val center: Vec, val gravPt: MassPoint) {
+    abstract fun updateForceForParticle(particle: Particle, theta: Double, G: Double)
     abstract fun recalibrate()
 }
 
 class Branch(
-    x: Double, y: Double, z: Double, var len: Double,
+    center: Vec, var len: Double,
     val children: Array<Node?> = Array(8) { null }
-): Node(null, x, y, z) {
-    override var gx: Double = 0.0
-    override var gy: Double = 0.0
-    override var gz: Double = 0.0
-    override var mass: Double = 0.0
-
-    fun contains(x: Double, y: Double, z: Double): Boolean {
-        return BarnesHutTree.isInside(x, y, z, this.x, this.y, this.z, this.len)
+): Node(null, center, MassPoint()) {
+    fun contains(vec: Vec): Boolean {
+        return BarnesHutTree.isInside(vec, center, this.len)
     }
 
     fun containsInCorrectChild(body: Body): Boolean {
-        if(!contains(body.x, body.y, body.z)) return false
+        if(!contains(body.particle.pt.pos)) return false
 
         val index = children.indexOfFirst { it == body }
         require(index in 0..7)
-        return indexOf(body.x, body.y, body.z) == index
+        return indexOf(body.particle.pt.pos) == index
     }
 
-    fun indexOf(x: Double, y: Double, z: Double): Int {
-        require(contains(x, y, z))
+    fun indexOf(pt: Vec): Int {
+        require(contains(pt))
 
         return when {
-            x <= this.x && y <= this.y && z <= this.z -> 0
-            x > this.x && y <= this.y && z <= this.z -> 1
-            x > this.x && y > this.y && z <= this.z -> 2
-            x <= this.x && y > this.y && z <= this.z -> 3
-            x <= this.x && y <= this.y && z > this.z -> 4
-            x > this.x && y <= this.y && z > this.z -> 5
-            x > this.x && y > this.y && z > this.z -> 6
+            pt.x <= center.x && pt.y <= center.y && pt.z <= center.z -> 0
+            pt.x > center.x && pt.y <= center.y && pt.z <= center.z -> 1
+            pt.x > center.x && pt.y > center.y && pt.z <= center.z -> 2
+            pt.x <= center.x && pt.y > center.y && pt.z <= center.z -> 3
+            pt.x <= center.x && pt.y <= center.y && pt.z > center.z -> 4
+            pt.x > center.x && pt.y <= center.y && pt.z > center.z -> 5
+            pt.x > center.x && pt.y > center.y && pt.z > center.z -> 6
             else -> 7
         }
     }
 
-    fun shrinkForDistinctChildren(x0: Double, y0: Double, z0: Double, x1: Double, y1: Double, z1: Double) {
+    fun shrinkForDistinctChildren(pt0: Vec, pt1: Vec) {
         while(true) {
-            val index0 = indexOf(x0, y0, z0)
-            val index1 = indexOf(x1, y1, z1)
+            val index0 = indexOf(pt0)
+            val index1 = indexOf(pt1)
 
             if(index0 != index1) {
                 break
@@ -64,109 +49,48 @@ class Branch(
             len /= 2
 
             when(index0) {
-                0 -> { x -= len; y -= len; z -= len }
-                1 -> { x += len; y -= len; z -= len }
-                2 -> { x += len; y += len; z -= len }
-                3 -> { x -= len; y += len; z -= len }
-                4 -> { x -= len; y -= len; z += len }
-                5 -> { x += len; y -= len; z += len }
-                6 -> { x += len; y += len; z += len }
-                else -> { x -= len; y += len; z += len }
+                0 -> { center.x -= len; center.y -= len; center.z -= len }
+                1 -> { center.x += len; center.y -= len; center.z -= len }
+                2 -> { center.x += len; center.y += len; center.z -= len }
+                3 -> { center.x -= len; center.y += len; center.z -= len }
+                4 -> { center.x -= len; center.y -= len; center.z += len }
+                5 -> { center.x += len; center.y -= len; center.z += len }
+                6 -> { center.x += len; center.y += len; center.z += len }
+                else -> { center.x -= len; center.y += len; center.z += len }
             }
         }
     }
 
     override fun recalibrate() {
-        var gxm = 0.0
-        var gym = 0.0
-        var gzm = 0.0
-        var m = 0.0
-
         children.filterNotNull().forEach {
             it.recalibrate()
-
-            gxm += it.gx * it.mass
-            gym += it.gy * it.mass
-            gzm += it.gz * it.mass
-            m += it.mass
         }
 
-        this.mass = m
-        this.gx = gxm / m
-        this.gy = gym / m
-        this.gz = gzm / m
+        gravPt.setToAverage(children.mapNotNull { it?.gravPt })
     }
 
-    override fun updateForceForBody(body: Body, theta: Double, G: Double, dt: Double) {
+    override fun updateForceForParticle(particle: Particle, theta: Double, G: Double) {
         // This uses recursion. We will need a path of length
         // log2(2 * bodies.size - 1) to store the current path.
         // Use 32, because 2^32 > 4 Bio.
-        val distance = sqrt((body.gx - gx).pow(2) + (body.gy - gy).pow(2) + (body.gz - gz).pow(2))
+        val distance = particle.pt.pos.distance(gravPt.pos)
+
         if (2 * len / distance < theta) {
-            body.addForce(this, G, dt)
+            particle.addForce(gravPt, G)
         } else {
             for(it in children) {
-                // XXX Recursion must be replaced
-                it?.updateForceForBody(body, theta, G, dt)
+                it?.updateForceForParticle(particle, theta, G)
             }
         }
     }
 }
 
-class Body(
-    x: Double,
-    y: Double,
-    z: Double,
-    override var mass: Double,
-    var vx: Double,
-    var vy: Double,
-    var vz: Double
-): Node(null, x, y, z) {
-    override val gx: Double get() = x
-    override val gy: Double get() = y
-    override val gz: Double get() = z
-
-    var totalForce: Double = 0.0
-
-    fun resetTotalForce() {
-        totalForce = 0.0
-    }
-
-    fun move(dt: Double) {
-        x += vx * dt
-        y += vy * dt
-        z += vz * dt
-    }
-
-    override fun updateForceForBody(body: Body, theta: Double, G: Double, dt: Double) {
-        body.addForce(this, G, dt)
-    }
-
-    fun addForce(other: Node, G: Double, dt: Double) {
-        if(other == this) return
-
-        val distance = sqrt((gx - other.gx).pow(2) + (gy - other.gy).pow(2) + (gz - other.gz).pow(2)) + 1e-9
-        val d0x = (other.gx - gx) / distance
-        val d0y = (other.gy - gy) / distance
-        val d0z = (other.gz - gz) / distance
-
-        val force = (mass * other.mass * G) / distance.pow(2)
-        val a = force / mass
-
-        // the change of velocity should be smaller than d because it is into the direction of x2/y2.
-        val ft = min(a * dt, 2 * distance)
-
-        vx += d0x * ft
-        vy += d0y * ft
-        vz += d0z * ft
-        totalForce += force // XXX or 'a'?
+class Body(val particle: Particle): Node(null, particle.pt.pos, particle.pt) {
+    override fun updateForceForParticle(particle: Particle, theta: Double, G: Double) {
+        particle.addForce(this.particle.pt, G)
     }
 
     override fun recalibrate() {
         // nothing to do.
-    }
-
-    override fun toString(): String {
-        return "Body(x = $gx, y = $gy, mass = $mass, vx = $vx, vy = $vy)"
     }
 }
