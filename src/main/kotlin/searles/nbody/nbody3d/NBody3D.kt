@@ -9,20 +9,23 @@ import searles.nbody.Commons
 import searles.nbody.DirectImageWriter
 import searles.nbody.PixelBuffer
 import searles.nbody.nbody3d.Universe.Companion.createBall
+import searles.nbody.nbody3d.Universe.Companion.createRotatingBall
+import searles.nbody.nbody3d.Universe.Companion.moveBy
+import searles.nbody.nbody3d.Universe.Companion.withMotion
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.*
 
 class NBody3D: DirectImageWriter() {
     private var isCalculationRunning: AtomicBoolean = AtomicBoolean(false)
     private val universe = Universe(G = 1.0, dt = 0.001, theta = 2.0).apply {
-        val particleCount = 50000
+        val particleCount = 10000
         val massPerParticle = 1e-3
         val massBlackHole = 100.0
-//        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(-4.0, 0.0, 0.0).withMotion(0.0, -4.0, 0.0))
-//        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(0.0, -4.0, 0.0).withMotion(4.0, 0.0, 0.0))
-//        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(4.0, 0.0, 0.0).withMotion(0.0, 4.0, 0.0))
-//        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(0.0, 4.0, 0.0).withMotion(-4.0, 0.0, 0.0))
-        this.addAll(createBall(particleCount, 1.0, massPerParticle))
+        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(-4.0, 0.0, 0.0).withMotion(0.0, -4.0, 0.0))
+        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(0.0, -4.0, 0.0).withMotion(4.0, 0.0, 0.0))
+        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(4.0, 0.0, 0.0).withMotion(0.0, 4.0, 0.0))
+        this.addAll(createRotatingBall(particleCount, 2.0, massPerParticle, massBlackHole).moveBy(0.0, 4.0, 0.0).withMotion(-4.0, 0.0, 0.0))
+        //this.addAll(createBall(particleCount, 1.0, massPerParticle))
     }
 
     private var viewMatrix = Commons.translate(width / 2.0, height / 2.0, 0.0)

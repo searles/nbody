@@ -1,16 +1,22 @@
 package searles.nbody.nbody3d
 
-sealed class Node(var parent: Branch? = null, val center: Vec, val gravPt: MassPoint) {
+sealed class Node(var parent: Branch? = null) {
+    abstract val center: Vec
+    abstract val gravPt: MassPoint
     abstract fun updateForceForParticle(particle: Particle, theta: Double, G: Double)
     abstract fun recalibrate()
 }
 
 class Branch(
-    center: Vec, var len: Double,
+    val region: Region,
     val children: Array<Node?> = Array(8) { null }
-): Node(null, center, MassPoint()) {
+): Node(null) {
+    override val center: Vec
+        get() = region.center
+    override val gravPt: MassPoint = MassPoint()
+
     fun contains(vec: Vec): Boolean {
-        return BarnesHutTree.isInside(vec, center, this.len)
+        return region.isInside(vec)
     }
 
     fun containsInCorrectChild(body: Body): Boolean {
@@ -22,43 +28,7 @@ class Branch(
     }
 
     fun indexOf(pt: Vec): Int {
-        require(contains(pt))
-
-        return when {
-            pt.x <= center.x && pt.y <= center.y && pt.z <= center.z -> 0
-            pt.x > center.x && pt.y <= center.y && pt.z <= center.z -> 1
-            pt.x > center.x && pt.y > center.y && pt.z <= center.z -> 2
-            pt.x <= center.x && pt.y > center.y && pt.z <= center.z -> 3
-            pt.x <= center.x && pt.y <= center.y && pt.z > center.z -> 4
-            pt.x > center.x && pt.y <= center.y && pt.z > center.z -> 5
-            pt.x > center.x && pt.y > center.y && pt.z > center.z -> 6
-            else -> 7
-        }
-    }
-
-    fun shrinkForDistinctChildren(pt0: Vec, pt1: Vec) {
-        while(true) {
-            val index0 = indexOf(pt0)
-            val index1 = indexOf(pt1)
-
-            if(index0 != index1) {
-                break
-            }
-
-            // There is a very small chance of rounding errors in the last double-digit.
-            len /= 2
-
-            when(index0) {
-                0 -> { center.x -= len; center.y -= len; center.z -= len }
-                1 -> { center.x += len; center.y -= len; center.z -= len }
-                2 -> { center.x += len; center.y += len; center.z -= len }
-                3 -> { center.x -= len; center.y += len; center.z -= len }
-                4 -> { center.x -= len; center.y -= len; center.z += len }
-                5 -> { center.x += len; center.y -= len; center.z += len }
-                6 -> { center.x += len; center.y += len; center.z += len }
-                else -> { center.x -= len; center.y += len; center.z += len }
-            }
-        }
+        return region.indexOf(pt)
     }
 
     override fun recalibrate() {
@@ -75,7 +45,7 @@ class Branch(
         // Use 32, because 2^32 > 4 Bio.
         val distance = particle.pt.pos.distance(gravPt.pos)
 
-        if (2 * len / distance < theta) {
+        if (2 * region.len / distance < theta) {
             particle.addForce(gravPt, G)
         } else {
             for(it in children) {
@@ -85,12 +55,21 @@ class Branch(
     }
 }
 
-class Body(val particle: Particle): Node(null, particle.pt.pos, particle.pt) {
+class Body(val particle: Particle): Node(null) {
+    override val center: Vec
+        get() = particle.pt.pos
+    override val gravPt: MassPoint
+        get() = particle.pt
+
     override fun updateForceForParticle(particle: Particle, theta: Double, G: Double) {
         particle.addForce(this.particle.pt, G)
     }
 
     override fun recalibrate() {
         // nothing to do.
+    }
+
+    override fun toString(): String {
+        return particle.toString()
     }
 }

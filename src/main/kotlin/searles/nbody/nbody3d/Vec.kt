@@ -67,4 +67,14 @@ data class Vec(var x: Double = 0.0, var y: Double = 0.0, var z: Double = 0.0) {
     fun length(): Double {
         return sqrt(x.pow(2) + y.pow(2) + z.pow(2))
     }
+
+    fun applyToComponents(action: (Double) -> Unit) {
+        action(x)
+        action(y)
+        action(z)
+    }
+
+    companion object {
+
+    }
 }

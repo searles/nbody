@@ -47,13 +47,13 @@ class BarnesHutTree {
         insert(body)
     }
 
-    suspend fun step(G: Double, dt: Double, theta: Double) {
+    fun step(G: Double, dt: Double, theta: Double) {
         // run in parallel
         val chunkSize = 500
         val chunks = bodies.chunked(chunkSize)
 
         root?.recalibrate()
-        bodies.forEach { updateForce(it.particle, G, theta) }
+        bodies.forEach { updateForce(it.particle, G, theta) } // TODO
 //        coroutineScope {
 //            root?.recalibrate()
 //
@@ -90,37 +90,26 @@ class BarnesHutTree {
             return
         }
 
-        val center = Vec()
-        var len: Double
-
-        if(root is Body) {
+        val region: Region = if(root is Body) {
             // 1 node in total
             val b = root as Body
-            center.setToMiddle(body.particle.pt.pos, b.particle.pt.pos)
-            len = body.particle.pt.pos.manhattanDistance(b.particle.pt.pos) * 1.00000000001 // makes rounding errors unlikely.
+
+            Region(
+                Vec().apply { setToMiddle(body.center, b.center) },
+                body.center.manhattanDistance(b.center) * 1.5
+            )
         } else {
             val branch = root as Branch
 
-            center.setTo(branch.center)
-            len = branch.len
-
-            // Expand if necessary
-            while(!isInside(body.particle.pt.pos, center, len)) {
-                // opposite of 'shrink'
-                if(body.particle.pt.pos.x <= center.x) center.x -= len
-                else center.x += len
-
-                if(body.particle.pt.pos.y <= center.y) center.y -= len
-                else center.y += len
-
-                if(body.particle.pt.pos.z <= center.z) center.z -= len
-                else center.z += len
-
-                len *= 2
+            Region(
+                Vec().apply { setTo(branch.region.center) },
+                branch.region.len
+            ).apply {
+                enlargeTowards(body.center)
             }
         }
 
-        insert(root, body, center, len)
+        insert(root, body, region)
     }
 
     private fun unlink(body: Body, reinsert: Boolean) {
@@ -153,8 +142,8 @@ class BarnesHutTree {
         }
 
         while(parent != null) {
-            if(parent.contains(body.particle.pt.pos)) {
-                insert(parent, body, parent.center.copy(), parent.len)
+            if(parent.contains(body.center)) {
+                insert(parent, body, parent.region.copy(center = parent.region.center.copy()))
                 return
             }
 
@@ -165,18 +154,21 @@ class BarnesHutTree {
         insert(body)
     }
 
-    private fun insert(node: Node?, body: Body, center: Vec, len: Double) {
+    private fun insert(node: Node?, body: Body, region: Region) {
         // node = current node in iteration. body is inserted at the current position of node or below it.
         var node = node
-        var len = len
 
         require(root != null)
 
         var parent: Branch? = null
 
         while(true) {
-            require(node == null || isInside(node.center, center, len))
-            require(isInside(body.particle.pt.pos, center, len))
+            if(!(node == null || region.isInside(node.center))) {
+                println("fail")
+            }
+
+            require(node == null || region.isInside(node.center))
+            require(region.isInside(body.center))
 
             if(node == null) {
                 attach(parent, body)
@@ -186,9 +178,9 @@ class BarnesHutTree {
             // XXX This is the proper place for a collision detection
             // XXX In this case we assume that this practically never happens.
 
-            if(node is Body || !(node as Branch).contains(body.particle.pt.pos)) {
-                val branch = Branch(center, len).apply {
-                    shrinkForDistinctChildren(node!!.center, body.particle.pt.pos)
+            if(node is Body || !(node as Branch).contains(body.center)) {
+                region.shrinkForDistinctChildren(node.center, body.center)
+                val branch = Branch(region).apply {
                     attach(this, node!!)
                     attach(this, body)
                 }
@@ -197,16 +189,19 @@ class BarnesHutTree {
                 return
             }
 
-            // XXX Rounding error if x == node.x and y == node.y.
-            require(node.contains(body.particle.pt.pos)) // node is Branch.
+            require(node.contains(body.center)) // node is Branch.
 
-            len = node.len / 2
-            center.x = if(body.particle.pt.pos.x <= node.center.x) node.center.x - len else node.center.x + len
-            center.y = if(body.particle.pt.pos.y <= node.center.y) node.center.y - len else node.center.y + len
-            center.z = if(body.particle.pt.pos.z <= node.center.z) node.center.z - len else node.center.z + len
+// FIXME compare to next 2 lines.           len = node.len / 2
+//            center.x = if(body.particle.pt.pos.x <= node.center.x) node.center.x - len else node.center.x + len
+//            center.y = if(body.particle.pt.pos.y <= node.center.y) node.center.y - len else node.center.y + len
+//            center.z = if(body.particle.pt.pos.z <= node.center.z) node.center.z - len else node.center.z + len
+
+            // XXX Rounding error if x == node.x and y == node.y.
+            region.setTo(node.region)
+            region.shrink(body.center)
 
             parent = node
-            node = node.children[node.indexOf(body.particle.pt.pos)]
+            node = node.children[node.indexOf(body.center)]
         }
     }
 
@@ -217,12 +212,6 @@ class BarnesHutTree {
             root = node
         } else {
             parent.children[parent.indexOf(node.center)] = node
-        }
-    }
-
-    companion object {
-        fun isInside(pt: Vec, center: Vec, len: Double): Boolean {
-            return pt.manhattanDistance(center) <= len
         }
     }
 }
