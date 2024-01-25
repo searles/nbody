@@ -40,12 +40,10 @@ class Branch(
     }
 
     override fun updateForceForParticle(particle: Particle, theta: Double, G: Double) {
-        // This uses recursion. We will need a path of length
-        // log2(2 * bodies.size - 1) to store the current path.
-        // Use 32, because 2^32 > 4 Bio.
         val distance = particle.pt.pos.distance(gravPt.pos)
 
         if (2 * region.len / distance < theta) {
+            // TODO A collision here means that theta is too big.
             particle.addForce(gravPt, G)
         } else {
             for(it in children) {

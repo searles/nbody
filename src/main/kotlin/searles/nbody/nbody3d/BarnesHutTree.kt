@@ -66,6 +66,8 @@ class BarnesHutTree {
 //            jobs.awaitAll()
 //        }
 
+        // TODO check collisions.
+
         for(body in bodies) {
             move(body, dt) // not in parallel because it modifies the tree.
         }

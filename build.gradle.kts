@@ -27,6 +27,7 @@ dependencies {
     compileOnly("javax.annotation:javax.annotation-api:1.3.2")
     compileOnly("org.jetbrains:annotations:13.0")
     testImplementation(kotlin("test"))
+    implementation(kotlin("stdlib-jdk8"))
 }
 
 tasks.test {
@@ -39,4 +40,12 @@ tasks.withType<KotlinCompile> {
 
 application {
     mainClass.set("searles.MainKt")
+}
+val compileKotlin: KotlinCompile by tasks
+compileKotlin.kotlinOptions {
+    jvmTarget = "1.8"
+}
+val compileTestKotlin: KotlinCompile by tasks
+compileTestKotlin.kotlinOptions {
+    jvmTarget = "1.8"
 }

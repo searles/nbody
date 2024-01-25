@@ -29,7 +29,6 @@ data class Particle(
 
         // the change of velocity should be smaller than d because it is into the direction of x2/y2.
         acc.add(other.pos, pt.pos, min(a / distance, distance))
-
         totalForce += force // XXX or 'a'?
     }
 
